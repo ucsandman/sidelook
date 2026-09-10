@@ -27,8 +27,18 @@ foreach ($file in @('computer.ps1','Computer.cs')) { Copy-Item -LiteralPath (Joi
 foreach ($dir in @('lib','public')) {
     $target = Join-Path $sidelookPayload $dir
     New-Item -ItemType Directory -Force -Path $target | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $sidelookRoot $dir) -File | Where-Object { $_.Extension -in @('.mjs','.js','.html','.css','.svg') } | Copy-Item -Destination $target
+    # lib nests (lib/agent, lib/agent/providers), so the tree is walked and each file lands under its own relative path.
+    Get-ChildItem -LiteralPath (Join-Path $sidelookRoot $dir) -File -Recurse | Where-Object { $_.Extension -in @('.mjs','.js','.html','.css','.svg') } | ForEach-Object {
+        $relative = $_.FullName.Substring((Join-Path $sidelookRoot $dir).Length).TrimStart('\','/')
+        $destination = Join-Path $target $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+        Copy-Item -LiteralPath $_.FullName -Destination $destination
+    }
 }
+# The one runtime dependency (Agent mode's DashClaw SDK): the published package files only, from the lockfile-pinned install.
+$sidelookDashclaw = Join-Path $sidelookPayload 'node_modules/dashclaw'
+New-Item -ItemType Directory -Force -Path $sidelookDashclaw | Out-Null
+foreach ($file in @('dashclaw.js','index.cjs','dashclaw.d.ts','package.json','LICENSE')) { Copy-Item -LiteralPath (Join-Path $sidelookRoot "node_modules/dashclaw/$file") -Destination $sidelookDashclaw }
 $sidelookNodeZip = Join-Path $sidelookBuild 'node.zip'
 $sidelookNodeHash = 'cc5149eabd53779ce1e7bdc5401643622d0c7e6800ade18928a767e940bb0e62'
 if (-not (Test-Path -LiteralPath $sidelookNodeZip)) { Invoke-WebRequest 'https://nodejs.org/dist/v24.15.0/node-v24.15.0-win-x64.zip' -OutFile $sidelookNodeZip }

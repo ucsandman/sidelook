@@ -28,6 +28,21 @@ The Windows build pins the Node archive SHA-256 and the Codex npm package integr
 
 Reference images, directions and source revisions persist in Sidelook's desktop WebView profile until **New project** clears them. A browser profile from a source install, or an older browser-based install, stays separate. Preview copies stay in bounded server memory until eviction or server exit. Source versions persist. Application state entered inside a generated preview resets when it's reopened.
 
+## Agent mode
+
+Agent mode gives the model a finite registry of typed tools over four application APIs (Slack, Stripe, HubSpot, Gmail) and no shell, no browser, no arbitrary HTTP. The model returns one structured tool choice per turn through the same isolated CLI transport as everything else; the local runtime validates the arguments and constructs every request itself.
+
+- Credentials live in `.env`, are read only by `lib/agent/config.mjs` in the server process, and never reach the page, the model prompt, the run files, the timeline evidence or DashClaw. The CLI child processes keep their existing environment allowlist, so the file is never forwarded to a model runtime. `lib/agent/redact.mjs` scrubs known token shapes from anything stored or streamed as defence in depth.
+- Every consequential write (a Stripe refund, a HubSpot property update, a Gmail send) runs only inside `lib/agent/effects.mjs`, which records the action with DashClaw through the official SDK, waits for a policy approval when DashClaw holds it, claims one execution attempt bound to the exact request, and only then calls the provider. There is no other code path to a write method; `tests/agent-tools.test.mjs` asserts that no read handler references one. If DashClaw cannot be reached, the write is refused, never allowed.
+- DashClaw evidence carries the method, the URL and a redacted body excerpt, never headers, cookies, tokens or screenshots.
+- Stripe runs in test mode by default. A live key is refused for every write unless `STRIPE_ALLOW_LIVE=1` is set on purpose, and a live-mode refund is also declared to DashClaw at the risk score that blocks it.
+- Retrieved Slack, Stripe, HubSpot and Gmail content is evidence, never instruction: it is wrapped as untrusted in the prompt, scanned for prompt injection through DashClaw, and no identifier the model uses may come from anywhere but a tool observation. The confirmation email is checked against the verified facts by DashClaw's non-fabrication policy before it is sent.
+- Approvals in the panel submit the person's decision to DashClaw with a separate approver key; a member-role agent key cannot approve its own action. A refresh never approves anything: the card is drawn from run state and the runtime accepts only the one pending action id.
+- Runs are saved without secrets under the Sidelook data folder. A run interrupted by a restart is never resumed blind: it is marked uncertain, or blocked when it was waiting for an approval.
+- Stop, the companion's Stop and Ctrl+Shift+F12 cancel the run. A write already accepted by a provider finishes its verification step; nothing new starts. Nothing is rolled back: four SaaS APIs are not one transaction, and the summary says exactly what happened.
+
+Live keys, the demo policies and the seed records are described in `docs/HACKATHON_SETUP.md`.
+
 ## Computer mode (0.7)
 
 A separate opt-in broker uses the same local host and origin, desktop bootstrap and session checks. A random owning-tab token, a ten-minute lease, one-minute single-use proposals and per-action approval gate every Windows operation. Stop invalidates proposals, aborts inference and terminates the owned native controller. Ctrl+Shift+F12 is registered before arming. If registration fails, acting stays off. A delivered action can't be recalled. Native identity, runtime ID, AutomationId, control type, name, visibility, enabled state and password status are checked against a fresh target before anything happens.

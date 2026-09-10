@@ -10,6 +10,8 @@ The launcher is unsigned, so Windows may show an unknown-publisher warning. The 
 
 ## Updates and removal
 
+Agent mode's application credentials (see docs/HACKATHON_SETUP.md) go in `%LOCALAPPDATA%Sidelook.env` for the installed app; a source checkout reads the repo's `.env` instead. Neither file is copied into a build.
+
 Quit Sidelook from the tray, then open the new download. Each build extracts into its own directory under `%LOCALAPPDATA%\Sidelook\versions` and the shortcuts move to it. Saved work stays in Sidelook's persistent desktop profile. A browser profile from a source install, or an older browser-based install, is separate, so its revisions don't come across on their own. Export the HTML you want to keep, then use **Settings, then Import a saved HTML prototype** in the companion. Imports cap at 120,000 bytes and add a version only when the 12-slot history has room. Older extracted versions stay on disk, and opening an old download after quitting the current one restores its shortcut.
 
 To remove Sidelook, quit it, then delete its shortcuts and its Sidelook folder under local application data in File Explorer. Desktop-profile projects and the official Codex login are separate things: **New project** clears the current saved project, and removing Sidelook neither signs you out nor touches another Codex install's credentials.
