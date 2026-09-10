@@ -40,6 +40,28 @@ test('redact() deep-clones and masks any value under a secret-named key',()=>{
   assert.equal(input.headers.Authorization,'Bearer sk_live_ABCDEF123456');
 });
 
+test('redactText scrubs a bare Google refresh token, a bare Google client secret and a Slack app token',()=>{
+  // Fixed, low-entropy fixtures (sequential letters) rather than random ones: exercise the pattern shape the brief
+  // names (prefix + exact length) without looking like a real credential. The exact bracketed label is the
+  // implementer's choice (parent, lib/agent/redact.mjs); this only asserts the raw token never survives.
+  const refreshToken='1//0g'+'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN'; // 1//0g + 40 base64url chars
+  const clientSecret='GOCSPX-'+'abcdefghijklmnopqrst'; // GOCSPX- + 20 chars
+  const slackAppToken='xapp-'+'abcdefghijklmnopqrstuvwxyzABCD'; // xapp- + 30 chars
+  assert.equal(refreshToken.length,45);assert.equal(clientSecret.length,27);assert.equal(slackAppToken.length,35);
+
+  const refreshOut=redactText(`refresh_token in the body: ${refreshToken}`);
+  assert.ok(!refreshOut.includes(refreshToken),'the Google refresh token must not survive redaction');
+  assert.match(refreshOut,/\[redacted:\w+\]/);
+
+  const secretOut=redactText(`client secret on file: ${clientSecret}`);
+  assert.ok(!secretOut.includes(clientSecret),'the Google client secret must not survive redaction');
+  assert.match(secretOut,/\[redacted:\w+\]/);
+
+  const appTokenOut=redactText(`slack app token: ${slackAppToken}`);
+  assert.ok(!appTokenOut.includes(slackAppToken),'the Slack app token must not survive redaction');
+  assert.match(appTokenOut,/\[redacted:\w+\]/);
+});
+
 test('redact() passes through non-object, non-string values',()=>{
   assert.equal(redact(42),42);
   assert.equal(redact(null),null);

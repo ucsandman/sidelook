@@ -50,8 +50,8 @@ export function initCompanion({api,getState,updateControls,openWorkflow,stopWork
   const DESKTOP='desktop';
   const appName=()=>{if(front?.id===DESKTOP)return 'the desktop';const name=String(front?.process || '').replace(/\.exe$/i,'');return name?name[0].toUpperCase()+name.slice(1):'the window';};
   const readFront=value=>value && typeof value==='object' && typeof value.title==='string' && value.title.trim()?{title:value.title.trim().slice(0,200),process:String(value.process || '').slice(0,100),id:String(value.id || '').slice(0,32),icon:typeof value.icon==='string' && value.icon.length<=65536 && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(value.icon)?value.icon:''}:null;
-  const view=()=>{const s=getState();return {dictating:!!dictation || !!s.recognition,thinking:!!controller,capturing:capturing || reading,busy:s.busy,elapsed:s.elapsed,planning:s.planning,live:s.live,liveCount:s.liveCount,setupBusy:s.setupBusy,checking:s.checking,token:s.token,configured:s.configured,remaining:s.remaining,computerOn:s.computerOn,frameAttached:!!frame,textAttached:!!text,stream:s.stream,captureKind:s.captureKind,screenOn:follow.state.on,snapshots:follow.state.snapshots};};
-  const running=v=>!!(v.dictating || v.thinking || v.capturing || v.busy || v.planning || v.live || v.setupBusy);
+  const view=()=>{const s=getState();return {dictating:!!dictation || !!s.recognition,thinking:!!controller,capturing:capturing || reading,busy:s.busy,elapsed:s.elapsed,planning:s.planning,live:s.live,liveCount:s.liveCount,setupBusy:s.setupBusy,checking:s.checking,token:s.token,configured:s.configured,remaining:s.remaining,computerOn:s.computerOn,agentRunning:s.agentRunning,frameAttached:!!frame,textAttached:!!text,stream:s.stream,captureKind:s.captureKind,screenOn:follow.state.on,snapshots:follow.state.snapshots};};
+  const running=v=>!!(v.dictating || v.thinking || v.capturing || v.busy || v.planning || v.live || v.setupBusy || v.agentRunning);
   // The attachment chips describe themselves from state, so the caption can never disagree with what goes.
   function renderStrips() {
     if(frame)$('frame-time').textContent=`Captured ${clock(frame.capturedAt)} · ${kb(frame.image)}${follow.state.on && follow.state.snapshots?' · replaces itself after each pause':''}`;
@@ -118,10 +118,10 @@ export function initCompanion({api,getState,updateControls,openWorkflow,stopWork
   function fitPanel() {
     if(!native || document.body.dataset.surface!=='companion')return;
     const dialog=[...document.querySelectorAll('dialog[open]')][0];
-    const computerOn=host.classList.contains('computer');
+    const computerOn=host.classList.contains('computer'),agentOn=host.classList.contains('agent');
     // The scroll area flexes to the window, so its own height says nothing; its children do.
     const scroll=document.querySelector('.companion-scroll'),inner=[...scroll.children].reduce((sum,el)=>sum+el.offsetHeight,0)+14;
-    const body=computerOn?document.getElementById('computer-mode').scrollHeight:inner+document.querySelector('.companion-compose').offsetHeight;
+    const body=computerOn?document.getElementById('computer-mode').scrollHeight:agentOn?document.getElementById('agent-mode').scrollHeight:inner+document.querySelector('.companion-compose').offsetHeight;
     let height=Math.ceil(document.querySelector('.companion-header').offsetHeight+body+2);
     if(dialog)height=Math.max(height,dialog.scrollHeight+64);
     if(height===postedHeight)return;
@@ -442,6 +442,7 @@ export function initCompanion({api,getState,updateControls,openWorkflow,stopWork
     const watch=new ResizeObserver(()=>fitPanel());
     for(const id of ['messages','deck','form','error','note'])watch.observe($(id));
     watch.observe(document.getElementById('computer-mode'));
+    watch.observe(document.getElementById('agent-mode'));
     new MutationObserver(()=>fitPanel()).observe(document.body,{attributeFilter:['open'],subtree:true});
   }
   $('capture').onclick=()=>capture();$('remove').onclick=()=>{setFrame(null);follow.chipRemoved();};$('mic').onclick=dictate;$('stop').onclick=stop;

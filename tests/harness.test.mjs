@@ -56,6 +56,7 @@ test('the Send button says what goes, and the header sensor line is computed apa
   assert.equal(sensorLine({screenOn:false,dictating:true}),'mic on (local)');
   assert.equal(activityLine({thinking:true,frameAttached:true}),'Thinking');
   assert.equal(activityLine({token:'t',configured:true,computerOn:true}),'Computer mode on · Ctrl+Shift+F12 stops it');
+  assert.equal(activityLine({token:'t',configured:true,agentRunning:true}),'Agent mode on · Stop ends the run');
   assert.equal(`${activityLine({token:'t',configured:true})} · ${sensorLine({})}`,statusLine({token:'t',configured:true}));
 });
 

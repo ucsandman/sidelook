@@ -5,6 +5,16 @@ import {browserTools} from './browser.mjs';
 import {createRun,appendEvent,transition,planEffect,updateEffect,addApproval,resolveApproval,finish,snapshot,TERMINAL} from '../lib/agent/run.mjs';
 
 const wait = ms => new Promise(resolve => setTimeout(resolve,ms));
+const plural = (n,word) => `${n} ${word}${n===1?'':'s'}`;
+// Mirrors public/agent.js's summaryLine(): plurals, then the refusal counts (only the ones above zero) appended.
+const summaryLine = s => {
+  const w = s.writes,a = s.approvals;
+  const parts = [plural(s.apps,'app'),plural(s.toolCalls,'tool call'),`${w.executed} of ${w.planned} write${w.planned===1?'':'s'} executed`,
+    `${w.verified} verified`,plural(a.required,'approval'),plural(s.duplicates,'duplicate side effect'),`${s.unresolved} unresolved`];
+  const refusals = [['blocked',w.blocked],['rejected',w.rejected],['expired',w.expired],['verification unavailable',w.verificationUnavailable],['state uncertain',w.uncertain]]
+    .filter(([,n]) => n > 0).map(([label,n]) => `${n} ${label}`);
+  return refusals.length ? `${parts.join(' · ')} · ${refusals.join(', ')}` : parts.join(' · ');
+};
 
 // A scripted runtime standing in for lib/agent/index.mjs's AgentRuntime: it speaks the same op surface server.mjs calls
 // (health, create, get, list, watch, answer, approve, reject, cancel, stopAll) and builds every run through the real
@@ -27,7 +37,10 @@ function createFakeRuntime() {
     updateEffect(e.run,effect.effectId,{status:'pending_approval'});
     addApproval(e.run,{actionId:'act_demo1',effectId:effect.effectId,app:'stripe',operation:'Refund $485.00',entity:'Acme (cus_demo)',amount:'$485.00',currency:'usd',
       reason:'Acme asked for a refund of their most recent eligible payment.',
-      sourceEvidence:['Slack #support: "please cancel and refund us"','Stripe pi_demo $485.00, refundable'],
+      sourceEvidence:[
+        {label:'Slack request',value:'"please cancel and refund us"',source:'slack',ref:'https://slack.example/archives/C1/p1'},
+        {label:'Stripe payment',value:'pi_demo $485.00, refundable',source:'stripe',ref:'pi_demo'}
+      ],
       policyReason:'refunds need a human',riskScore:60,expiresAt:new Date(Date.now()+900000).toISOString()});
     transition(e.run,'waiting_for_approval','A refund needs a person.');notify(e);
   }
@@ -54,8 +67,11 @@ function createFakeRuntime() {
     appendEvent(e.run,{kind:'verify',app:'gmail',status:'verified',label:'Gmail message verified',detail:'Sent mail search found it.',effectId:gmail.effectId,evidence:{messageId:'msg_demo'}});
     updateEffect(e.run,gmail.effectId,{status:'verified',verification:{at:new Date().toISOString(),verified:true,detail:'Sent mail search found it.'}});notify(e);await wait(40);if(e.cancelled) return;
 
+    // finish()'s message is the runtime's own closing line (run.closing, shown plain); the model's words are a
+    // separate field the loop sets directly (run.finalMessage, shown only under "The agent said").
+    e.run.finalMessage = 'Refunded Acme $485.00, updated HubSpot to Cancelled, and sent confirmation.';
     transition(e.run,'verifying','All writes verified.');
-    finish(e.run,'completed','Refunded Acme $485.00, updated HubSpot to Cancelled, and sent confirmation.');
+    finish(e.run,'completed','All writes finished.');
     notify(e);
   }
 
@@ -113,13 +129,15 @@ function createFakeRuntime() {
       return {run:snapshot(e.run),approval:e.run.approvals.find(a => a.actionId === actionId)};
     },
     async cancel(runId) {
+      // Like the real runtime: cancel marks the run and hands back the pre-terminal snapshot; the terminal state
+      // (the write in flight finishing its verification step) arrives a tick later through the watcher, on the stream.
       cancelCalls.push(runId);
       const e = entry(runId);
       if (TERMINAL.has(e.run.status)) return snapshot(e.run);
       e.cancelled = true;
-      finish(e.run,'cancelled','Stopped by the user.');
-      notify(e);
-      return snapshot(e.run);
+      const pending = snapshot(e.run);
+      setTimeout(() => { if (!TERMINAL.has(e.run.status)) { finish(e.run,'cancelled','Stopped by the user.');notify(e); } },50);
+      return pending;
     },
     async stopAll() {
       let stopped = 0;
@@ -184,6 +202,14 @@ try {
   assert.match(fields,/App\nstripe/);assert.match(fields,/Amount\n\$485\.00/);assert.match(fields,/Action id\nact_demo1/);
   assert.equal(await page.locator('#agent-approve').isVisible(),true);assert.equal(await page.locator('#agent-reject').isVisible(),true);count++;
 
+  // Each source fact carries its ref as a second muted line, the Slack quote reads as data with a "from Slack" prefix,
+  // and Decide by counts down from the approval's expiresAt on the same ticker.
+  const evidenceText = await page.locator('#agent-approval-fields ul').innerText();
+  assert.match(evidenceText,/Slack request: from Slack: "please cancel and refund us"/);
+  assert.match(evidenceText,/https:\/\/slack\.example\/archives\/C1\/p1/);
+  assert.match(evidenceText,/Stripe payment: pi_demo \$485\.00, refundable\npi_demo/);
+  assert.match(await page.locator('#agent-decide-by').innerText(),/^Decide by \d{2}:\d{2}$/);count++;
+
   // Details is a button revealing the evidence, never a <details> arrow.
   const detailsButtons = page.locator('#agent-timeline .agent-reveal');
   await detailsButtons.first().click();
@@ -197,27 +223,37 @@ try {
   await page.waitForFunction(() => document.getElementById('agent-summary').offsetParent !== null,{timeout:10000});
   const finalRun = await runtime.get(firstRunId);
   const s = finalRun.summary;
-  const summaryLine = await page.locator('#agent-summary-line').innerText();
-  assert.equal(summaryLine,`${s.apps} apps · ${s.toolCalls} tool calls · ${s.writes.planned} writes · ${s.writes.verified} verified · ${s.approvals.required} approval${s.approvals.required === 1 ? '' : 's'} · ${s.duplicates} duplicate side effects · ${s.unresolved} unresolved`);
-  assert.equal(s.writes.planned,3);assert.equal(s.writes.verified,3);assert.equal(s.approvals.required,1);assert.equal(s.duplicates,0);assert.equal(s.unresolved,0);
+  const summaryText = await page.locator('#agent-summary-line').innerText();
+  assert.equal(summaryText,summaryLine(s));
+  assert.equal(s.writes.planned,3);assert.equal(s.writes.executed,3);assert.equal(s.writes.verified,3);assert.equal(s.approvals.required,1);assert.equal(s.duplicates,0);assert.equal(s.unresolved,0);
   const effects = await page.locator('#agent-effects').innerText();assert.match(effects,/verified · stripe stripe\.refund_payment/);
+  // run.closing (the runtime's own sentence) reads plain with no attribution; run.finalMessage (the model's words)
+  // reads only under "The agent said". They are two different fields, rendered two different ways.
+  assert.equal(await page.locator('#agent-closing').innerText(),'All writes finished.');
   assert.match(await page.locator('#agent-final').innerText(),/The agent said[\s\S]*Refunded Acme \$485\.00/);count++;
   await page.locator('#companion').screenshot({path:'.artifacts/agent-summary.png'});
 
-  // A second run that is rejected ends blocked, with the rejection visible.
+  // A second run that is rejected ends blocked, with the rejection visible and the refusal counted on the summary line.
   await page.locator('#agent-start').waitFor({state:'visible'});
   await page.locator('#agent-goal').fill('Resolve a second, unrelated cancellation.');
   await page.locator('#agent-start-button').click();await page.locator('#agent-approval').waitFor({state:'visible'});
+  const rejectedRunId = (await runtime.list())[0].runId;
   await page.locator('#agent-reject').click();
   await page.waitForFunction(() => document.getElementById('agent-status').textContent.trim() === 'blocked');
-  assert.match(await page.locator('#agent-timeline').innerText(),/Refund rejected/);count++;
+  assert.match(await page.locator('#agent-timeline').innerText(),/Refund rejected/);
+  const rs = (await runtime.get(rejectedRunId)).summary;
+  assert.equal(rs.writes.rejected,1,'the rejected write is on the ledger');
+  assert.equal(await page.locator('#agent-summary-line').innerText(),summaryLine(rs));count++;
 
-  // Stop during a run posts cancel.
+  // Stop during a run disables itself immediately (the run is still finishing its write in flight) and posts cancel;
+  // the terminal status only lands once the fake runtime's watcher notifies it a tick later, proving the page picks the
+  // terminal state up from the stream rather than the immediate (pre-terminal) response.
   await page.locator('#agent-start').waitFor({state:'visible'});
   await page.locator('#agent-goal').fill('A third run, stopped early.');
   await page.locator('#agent-start-button').click();await page.locator('#agent-run').waitFor({state:'visible'});
   const cancelsBefore = runtime.cancelCalls.length;
   await page.locator('#agent-stop').click();
+  assert.equal(await page.locator('#agent-stop').isDisabled(),true,'Stop disables itself before the terminal snapshot arrives');
   await page.waitForFunction(() => document.getElementById('agent-status').textContent.trim() === 'cancelled');
   assert.equal(runtime.cancelCalls.length,cancelsBefore + 1);count++;
 
@@ -232,5 +268,5 @@ try {
   await page.locator('#companion').screenshot({path:'.artifacts/agent-mobile.png'});count++;
 
   assert.deepEqual(errors,[]);count++;
-  console.log(`PASS: ${count} Agent mode UI checks; Set it up from Settings, five health indicators, the model line, an empty-goal refusal, Start with consent, streamed timeline rows, the DashClaw approval card with no tick and no details, Details revealing evidence, Approve to a summary matching run.summary, Reject to blocked, Stop posting cancel, Back and Open keeping the run, mobile overflow and browser errors. ${runtime.createCalls.length} synthetic runs, ${runtime.cancelCalls.length} synthetic cancels, no model charges.`);
+  console.log(`PASS: ${count} Agent mode UI checks; Set it up from Settings, five health indicators, the model line, an empty-goal refusal, Start with consent, streamed timeline rows, the DashClaw approval card with no tick and no details, source evidence refs and a Slack quote read as data, a Decide by countdown, Details revealing evidence, Approve to a summary matching run.summary with the runtime's closing line kept apart from the model's final words, Reject to blocked with its refusal counted on the summary line, Stop disabling itself immediately and the terminal state arriving on the stream, Back and Open keeping the run, mobile overflow and browser errors. ${runtime.createCalls.length} synthetic runs, ${runtime.cancelCalls.length} synthetic cancels, no model charges.`);
 } finally { await browser.close();await new Promise(r => app.close(r)); }

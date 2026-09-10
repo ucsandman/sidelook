@@ -66,7 +66,7 @@ async function loadDependencies() {
 // own "not waiting" error. So this never blocks a retry on "a call is already in flight" — it only remembers a call that
 // actually succeeded, and keeps retrying on every later snapshot until one lands after the wait is truly armed.
 function driveRun(runtime, runId, scenario, fakeDashClaw, dashClient) {
-  let decidedActionId = null, answeredTurn = null, stopIssued = false, sawPendingApproval = false;
+  let decidedActionId = null, answeredTurn = null, stopIssued = false, sawPendingApproval = false, unavailableTriggered = false;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { unsubscribe(); reject(Object.assign(new Error(`Scenario timed out after ${SCENARIO_TIMEOUT_MS / 1000}s.`), {code:'SCENARIO_TIMEOUT'})); }, SCENARIO_TIMEOUT_MS);
     const finishWith = snap => { clearTimeout(timer); unsubscribe(); resolve({run:snap, pendingApprovalObserved:sawPendingApproval}); };
@@ -75,6 +75,12 @@ function driveRun(runtime, runId, scenario, fakeDashClaw, dashClient) {
       if (!stopIssued && scenario.stopAfter && snap.events.some(e => e.label === scenario.stopAfter)) {
         stopIssued = true;
         runtime.cancel(runId).catch(() => {});
+      }
+      // scenario 22: the harness flips the fake DashClaw server unreachable the instant the model turn that will write is on the
+      // timeline — before executeWrite ever calls governed.record — so the block is deterministic and needs no new fault kind.
+      if (!unavailableTriggered && scenario.dashclaw?.unavailableOnLabel && snap.events.some(e => e.label === scenario.dashclaw.unavailableOnLabel)) {
+        unavailableTriggered = true;
+        fakeDashClaw.faults.unavailable = true;
       }
       if (snap.status === 'waiting_for_approval') {
         sawPendingApproval = true;
@@ -147,8 +153,38 @@ function evaluate(scenario, run, providers, pendingApprovalObserved) {
   if (scenario.expect.state?.refunds !== undefined) checks.push(check('state.refunds', scenario.expect.state.refunds, providers.state.refunds.length));
   if (scenario.expect.state?.sent !== undefined) checks.push(check('state.sent', scenario.expect.state.sent, providers.state.sent.length));
   if (scenario.expect.pendingApprovalObserved) checks.push(check('pendingApprovalObserved', true, pendingApprovalObserved));
+  // The panel prints run.summary.duplicates, not this file's own provider-call count; the two must agree on every scenario, not
+  // only the ones written to exercise the number.
+  checks.push(check('summary.duplicates matches provider calls', writes.duplicate, run.summary?.duplicates ?? null));
+  // scenario 22: the effect the run blocked on carries DashClaw's real unavailability code, not a generic failure.
+  if (scenario.expect.effectErrorCode !== undefined) {
+    const refundEffect = effects.find(e => e.tool === 'stripe.refund_payment');
+    checks.push(check('effectErrorCode', scenario.expect.effectErrorCode, refundEffect?.error?.code ?? null));
+  }
+  // scenarios 22-23: how many times the provider itself was actually asked to act, keyed by method name.
+  if (scenario.expect.callCounts) for (const [method, expected] of Object.entries(scenario.expect.callCounts)) checks.push(check(`callCount.${method}`, expected, providers.calls.filter(c => c.method === method).length));
+  // scenario 24: DashClaw lost the outcome report; the timeline must say so by name, not swallow it.
+  if (scenario.expect.errorEventLabelContains) checks.push(check('errorEventMentionsDashClaw', true, run.events.some(e => e.kind === 'error' && e.label.includes(scenario.expect.errorEventLabelContains))));
+  // scenario 25: a write cancelled after the provider accepted it must land on one of a small set of honest final states,
+  // never silently stay mid-flight ('claimed'/'executing') and never get counted twice.
+  if (scenario.expect.effectStatusIn) {
+    const {tool, statuses} = scenario.expect.effectStatusIn;
+    const effect = effects.find(e => e.tool === tool);
+    checks.push({name:'effectStatusIn', expected:statuses.join('|'), actual:effect?.status ?? null, pass:statuses.includes(effect?.status)});
+  }
 
   return {id:scenario.id, name:scenario.name, pass:checks.every(c => c.pass), checks, writes, recovered, status:run.status, finalMessage:run.finalMessage};
+}
+
+// scenario 21: a hold that DashClaw itself expires must resolve fast — the fake's own poll cadence (3s), not the 15-minute
+// production default, is what a 2s approvalWaitSecondsOverride is for. Anything ballooning past this points at a real bug
+// (a poll loop that stopped noticing expiry), not a slow machine.
+function applyElapsedCheck(result, scenario, elapsedMs) {
+  if (scenario.expect.maxElapsedMs === undefined) return result;
+  const pass = elapsedMs <= scenario.expect.maxElapsedMs;
+  result.checks.push({name:'elapsedMs', expected:`<= ${scenario.expect.maxElapsedMs}ms`, actual:`${elapsedMs}ms`, pass});
+  result.pass = result.pass && pass;
+  return result;
 }
 
 async function runScenario(scenario, tmpRoot) {
@@ -159,6 +195,8 @@ async function runScenario(scenario, tmpRoot) {
     // The fake speaks the hackathon pack from the contract (section 15) unless a scenario overrides a rule.
     const HACKATHON_POLICY = {holdUrlPatterns:['/v1/refunds'], approvalRiskThreshold:90, blockRiskThreshold:100, nonFabrication:true, allowedActionTypes:['api', 'email'], requireEvidence:true};
     fakeDashClaw = await startFakeDashClaw({policy:{...HACKATHON_POLICY, ...(scenario.dashclaw?.policy || {})}, keys:{agent:'sk_test_fake_agent', approver:'sk_test_fake_approver'}});
+    // scenarios 23-24: a single-shot fault on one DashClaw route (the fake already supports this; nothing new to wire on its side).
+    for (const fault of scenario.dashclaw?.failNext || []) fakeDashClaw.faults.failNext(fault.route, fault.opts);
     const providers = createFakeProviders({fixtures:scenario.fixtures, faults:scenario.faults, clock:() => Date.now()});
     const inference = wrapScriptedModel(createScriptedModel(scenario.model || {}));
     const config = buildConfig(fakeDashClaw.baseUrl);
@@ -177,7 +215,83 @@ async function runScenario(scenario, tmpRoot) {
       last = outcome.run;
       pendingApprovalObserved = pendingApprovalObserved || outcome.pendingApprovalObserved;
     }
-    return {...evaluate(scenario, last, providers, pendingApprovalObserved), elapsedMs:Date.now() - startedAt};
+    const elapsedMs = Date.now() - startedAt;
+    return {...applyElapsedCheck(evaluate(scenario, last, providers, pendingApprovalObserved), scenario, elapsedMs), elapsedMs};
+  } catch (error) {
+    const code = error.code === 'ERR_MODULE_NOT_FOUND' ? 'DEPENDENCY_NOT_BUILT' : (error.code || 'RUNNER_ERROR');
+    return {id:scenario.id, name:scenario.name, pass:false, status:'error', error:{code, message:error.message}, checks:[], writes:{requested:0, authorized:0, blocked:0, duplicate:0, verified:0, uncertain:0}, recovered:false, elapsedMs:Date.now() - startedAt};
+  } finally {
+    await fakeDashClaw?.close?.().catch(() => {});
+    if (runDir) await rm(runDir, {recursive:true, force:true}).catch(() => {});
+  }
+}
+
+const RESTART_TIMEOUT_MS = 10000;
+
+// Scenario 26 only: restart reconciliation. This does not fit runScenario's one-run-to-a-terminal-status shape, because the
+// point is to catch the first AgentRuntime *before* it reaches one — the way a real crash would — and then hand the same
+// store directory and the same fake providers to a second, freshly built runtime, exactly as a restarted Sidelook process
+// would. `reconcileStored()` (lib/agent/index.mjs) today only marks a stranded write 'uncertain'/'expired' without ever
+// reading the provider back; the parent is changing that. This scenario writes the assertion against the contract that
+// change should satisfy and is marked `pendingEngineFix` so the table reports PENDING, not FAIL, until it lands.
+async function runRestartReconciliationScenario(scenario, tmpRoot) {
+  const startedAt = Date.now();
+  let fakeDashClaw = null, runDir = null;
+  try {
+    const {startFakeDashClaw, createGoverned, RunStore} = await loadDependencies();
+    const HACKATHON_POLICY = {holdUrlPatterns:['/v1/refunds'], approvalRiskThreshold:90, blockRiskThreshold:100, nonFabrication:true, allowedActionTypes:['api', 'email'], requireEvidence:true};
+    fakeDashClaw = await startFakeDashClaw({policy:HACKATHON_POLICY, keys:{agent:'sk_test_fake_agent', approver:'sk_test_fake_approver'}});
+    // The refund really lands (lostAfterSuccess writes it before throwing) but the read-back that would prove it is faulted for
+    // the whole run, so nothing inside effects.mjs's own recovery path can self-heal it before the "crash" — the only way to
+    // leave a genuinely unresolved write behind for a restart to find.
+    const providers = createFakeProviders({fixtures:{}, faults:{'stripe.createRefund':'lostAfterSuccess', 'stripe.findRefunds':'failAlways'}});
+    const config = buildConfig(fakeDashClaw.baseUrl);
+    const governed = createGoverned({config});
+    runDir = await mkdtemp(join(tmpRoot, `s${scenario.id}-`));
+    const realStore = new RunStore({dir:runDir});
+    let frozen = false, decidedActionId = null;
+    // Once the refund goes uncertain, no further save() reaches disk: the live run keeps running to its own (different)
+    // terminal status in the background, but the file a restart would find is frozen at the exact moment a process would
+    // have died mid-write, never overwritten by the original run's own eventual self-driven conclusion.
+    const crashStore = {list:(...a) => realStore.list(...a), load:(...a) => realStore.load(...a), save:run => (frozen ? Promise.resolve() : realStore.save(run))};
+    const inference = wrapScriptedModel(createScriptedModel({}));
+    const runtime1 = new AgentRuntime({inference, store:crashStore, governed, providers, config});
+    const created = await runtime1.create({goal:scenario.goal, model:'scripted', effort:'low'});
+
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(Object.assign(new Error('Scenario 26 timed out before the refund went uncertain.'), {code:'SCENARIO_TIMEOUT'})), RESTART_TIMEOUT_MS);
+      const unsubscribe = runtime1.watch(created.runId, snap => {
+        if (frozen) return;
+        if (snap.status === 'waiting_for_approval') {
+          const approval = snap.approvals.find(a => a.status === 'pending');
+          if (approval && decidedActionId !== approval.actionId) runtime1.approve(created.runId, approval.actionId, 'Approved by the eval harness.').then(() => { decidedActionId = approval.actionId; }).catch(() => {});
+          return;
+        }
+        const refundEffect = snap.effects.find(e => e.tool === 'stripe.refund_payment');
+        if (refundEffect?.status === 'uncertain' && snap.status === 'executing') {
+          frozen = true;
+          clearTimeout(timer);
+          unsubscribe();
+          realStore.save(snap).then(resolve, reject); // the crash snapshot, written once and never again
+        }
+      });
+    });
+
+    // The provider is reachable again by the time the process restarts; the read that was faulted to force the crash now answers.
+    providers.faults.clear('stripe.findRefunds');
+    // A second runtime over the same store dir and the same fake providers, as a restarted process would build.
+    const runtime2 = new AgentRuntime({inference, store:realStore, governed, providers, config});
+    await runtime2.reconcileStored();
+    const reconciled = await realStore.load(created.runId);
+    const refundEffect = reconciled?.effects?.find(e => e.tool === 'stripe.refund_payment');
+
+    const checks = [{name:'refund effect verified after reconcileStored', expected:'verified', actual:refundEffect?.status ?? null, pass:refundEffect?.status === 'verified'}];
+    const status = refundEffect?.status === 'verified' ? 1 : 0;
+    return {
+      id:scenario.id, name:scenario.name, pass:checks.every(c => c.pass), checks,
+      writes:{requested:1, authorized:1, blocked:0, duplicate:0, verified:status, uncertain:refundEffect?.status === 'uncertain' ? 1 : 0},
+      recovered:false, status:reconciled?.status ?? 'unknown', finalMessage:reconciled?.finalMessage ?? '', elapsedMs:Date.now() - startedAt
+    };
   } catch (error) {
     const code = error.code === 'ERR_MODULE_NOT_FOUND' ? 'DEPENDENCY_NOT_BUILT' : (error.code || 'RUNNER_ERROR');
     return {id:scenario.id, name:scenario.name, pass:false, status:'error', error:{code, message:error.message}, checks:[], writes:{requested:0, authorized:0, blocked:0, duplicate:0, verified:0, uncertain:0}, recovered:false, elapsedMs:Date.now() - startedAt};
@@ -200,11 +314,15 @@ function aggregate(results) {
   };
 }
 
+// A pendingEngineFix scenario that has not passed yet reports PENDING, not FAIL: it is a known gap in an engine file this
+// harness does not own, not a regression in this run.
+const verdict = r => (r.pass ? 'PASS' : r.pendingEngineFix ? 'PENDING' : 'FAIL');
+
 function printTable(results) {
   console.log('id  name                                              status      pass');
   for (const r of results) {
     const status = (r.error ? `error:${r.error.code}` : r.status).padEnd(11);
-    console.log(`${String(r.id).padEnd(4)}${r.name.slice(0, 50).padEnd(50)}${status} ${r.pass ? 'PASS' : 'FAIL'}`);
+    console.log(`${String(r.id).padEnd(4)}${r.name.slice(0, 50).padEnd(50)}${status} ${verdict(r)}`);
     if (!r.pass) for (const c of r.checks.filter(c => !c.pass)) console.log(`      ${c.name}: expected ${JSON.stringify(c.expected)}, got ${JSON.stringify(c.actual)}`);
     if (r.error) console.log(`      ${r.error.message}`);
   }
@@ -216,18 +334,19 @@ async function main() {
   if (!scenarios.length) { console.error(`No scenario with id ${args.only}.`); process.exitCode = 1; return; }
   const tmpRoot = await mkdtemp(join(tmpdir(), 'sidelook-agent-eval-'));
   const results = [];
-  try { for (const scenario of scenarios) results.push(await runScenario(scenario, tmpRoot)); }
+  try { for (const scenario of scenarios) results.push(await (scenario.custom === 'restartReconciliation' ? runRestartReconciliationScenario(scenario, tmpRoot) : runScenario(scenario, tmpRoot))); }
   finally { await rm(tmpRoot, {recursive:true, force:true}).catch(() => {}); }
 
   const metrics = aggregate(results);
   printTable(results);
-  console.log(`\n${metrics.scenariosPassed}/${metrics.scenariosTotal} scenarios passed (${Math.round(metrics.scenarioPassRate * 100)}%).`);
+  const pending = results.filter(r => r.pendingEngineFix && !r.pass).length;
+  console.log(`\n${metrics.scenariosPassed}/${metrics.scenariosTotal} scenarios passed (${Math.round(metrics.scenarioPassRate * 100)}%)${pending ? `, ${pending} pending an engine fix` : ''}.`);
 
   const report = {generatedAt:new Date().toISOString(), scenarios:results, metrics};
   await mkdir(dirname(args.json), {recursive:true}).catch(() => {});
   await writeFile(args.json, JSON.stringify(report, null, 2));
   console.log(`Report written to ${args.json}`);
-  process.exitCode = results.every(r => r.pass) ? 0 : 1;
+  process.exitCode = results.every(r => r.pass || r.pendingEngineFix) ? 0 : 1;
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

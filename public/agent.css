@@ -20,8 +20,10 @@
 #agent-error{color:#f2b49e;font-size:12px;margin:8px 0 0}
 #agent-timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .agent-row-item{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:13px}
+.agent-row-model{color:var(--muted)}
 .agent-glyph{font-size:13px;width:14px;text-align:center;flex-shrink:0}
-.agent-glyph-ok,.agent-glyph-verified{color:var(--accent)}
+.agent-glyph-verified{color:var(--accent)}
+.agent-glyph-ok{color:var(--muted)}
 .agent-glyph-blocked,.agent-glyph-rejected,.agent-glyph-failed{color:#f2b49e}
 .agent-glyph-started,.agent-glyph-pending,.agent-glyph-unverified,.agent-glyph-uncertain,.agent-glyph-info{color:var(--muted)}
 .agent-tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
@@ -30,18 +32,24 @@
 #agent-timeline .agent-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0}
 #agent-timeline .agent-reveal[aria-expanded=true]{color:var(--ink)}
 #agent-timeline pre{max-height:200px;overflow:auto;font-size:12px;line-height:1.45;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:2px 0 0;white-space:pre-wrap;flex-basis:100%}
-#agent-approval,#agent-clarify,#agent-summary{border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--panel)}
+/* The accent border is the one place on the screen that means "a person must decide now"; a card that only reports
+   (clarify, summary) gets the plain line rule and no filled background so it reads calmer than the approval card. */
+#agent-approval{border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--panel)}
+#agent-clarify,#agent-summary{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 #agent-approval h3,#agent-clarify h3{font:500 15px/1.3 'Segoe UI',sans-serif;margin:0 0 8px}
 #agent-approval-fields{margin:0 0 10px;font-size:13px}
 #agent-approval-fields dt{color:var(--muted);font-size:12px;margin-top:8px}
 #agent-approval-fields dt:first-child{margin-top:0}
 #agent-approval-fields dd{margin:2px 0 0;color:var(--ink)}
 #agent-approval-fields ul{margin:2px 0 0;padding-left:18px;color:var(--ink)}
+.agent-evidence-ref{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+#agent-decide-by{font-size:12px;color:var(--muted);margin:0 0 10px}
 #agent-question{margin:0 0 8px;font-size:13px}
 #agent-answer-text{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 8px}
 #agent-summary-line{font-size:14px;font-weight:500;margin:0 0 10px}
 #agent-effects{list-style:none;margin:0 0 10px;padding:0;font-size:13px;color:var(--muted)}
 #agent-effects li{margin:2px 0}
+#agent-closing{font-size:12px;color:var(--muted);margin:0 0 6px}
 #agent-final{font-size:12px;color:var(--muted);margin:0}
 #agent-final b{color:var(--ink);font-weight:500}
 .agent-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0}

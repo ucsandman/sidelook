@@ -208,7 +208,8 @@ function fakeStripeFetch(handler){
 test('stripe.findCustomer searches by email with the exact query string, headers never beyond Authorization',async()=>{
   const config=loadConfig({env:{STRIPE_SECRET_KEY:'sk_test_fake'},loadFile:false});
   const {fetchImpl,calls}=fakeStripeFetch(({path,query})=>{
-    assert.equal(path,'/v1/customers/search');assert.equal(query.query,"email:'a@acme.com'");assert.equal(query.limit,'10');
+    // An exact email goes through the read-your-writes list endpoint, not the lagging search index.
+    assert.equal(path,'/v1/customers');assert.equal(query.email,'a@acme.com');assert.equal(query.limit,'10');
     return {status:200,body:{data:[{id:'cus_1',email:'a@acme.com',name:'Acme Inc'}]}};
   });
   const results=await createStripe({config,fetchImpl}).findCustomer({email:'a@acme.com'});

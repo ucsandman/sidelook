@@ -189,6 +189,7 @@
           <section id="agent-approval" hidden aria-label="DashClaw policy approval">
             <h3>DashClaw policy approval</h3>
             <dl id="agent-approval-fields"></dl>
+            <p id="agent-decide-by"></p>
             <div class="agent-row"><button type="button" class="button amber" id="agent-approve">Approve</button><button type="button" class="quiet" id="agent-reject">Reject</button></div>
           </section>
           <section id="agent-clarify" hidden aria-label="The agent needs an answer">
@@ -200,11 +201,12 @@
           <section id="agent-summary" hidden aria-label="Run summary">
             <p id="agent-summary-line"></p>
             <ol id="agent-effects"></ol>
+            <p id="agent-closing" hidden></p>
             <p id="agent-final" hidden><b>The agent said</b> <span id="agent-final-text"></span></p>
           </section>
         </section>
       </div>
-      <footer class="agent-foot"><span>Ctrl+Shift+F12 stops from any app</span><button type="button" id="agent-stop">Stop</button></footer>
+      <footer class="agent-foot"><span id="agent-hotkey-note">Ctrl+Shift+F12 stops from any app</span><button type="button" id="agent-stop">Stop</button></footer>
     </section>
   </section>
 

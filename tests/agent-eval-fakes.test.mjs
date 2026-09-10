@@ -2,8 +2,51 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createFakeProviders, ProviderError} from '../eval/fake-providers.mjs';
 import {createScriptedModel} from '../eval/scripted-model.mjs';
+import {startFakeDashClaw} from '../eval/fake-dashclaw.mjs';
+import {createGoverned} from '../lib/agent/governed.mjs';
 import {createRun, addFact} from '../lib/agent/run.mjs';
 import {buildPrompt} from '../lib/agent/planner.mjs';
+
+// ---------------------------------------------------------------------------------------------------------------------
+// eval/fake-dashclaw.mjs — fault hooks the new eval scenarios (21-26) rely on. The 'claim'-drop and 'unavailable' hooks
+// already have coverage in tests/agent-governed.test.mjs; these two do not.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const AGENT_KEY = 'sk_test_fake_agent', APPROVER_KEY = 'sk_test_fake_approver';
+const REFUND_ACT = {kind:'http', request:{method:'POST', url:'https://api.stripe.com/v1/refunds'}};
+function governedFor(fake) {
+  return createGoverned({config:{dashclaw:{baseUrl:fake.baseUrl, apiKey:AGENT_KEY, approverApiKey:APPROVER_KEY, agentId:'sidelook-agent'}}});
+}
+function refundCtx(runId) { return {actionType:'api', declaredGoal:'Refund $485.00 to Acme per the Slack cancellation request', riskScore:60, systemsTouched:['stripe'], act:REFUND_ACT, runId}; }
+
+test('fault hook: approvalWaitSecondsOverride expires a pending approval, discovered on the next read (scenario 21)', async () => {
+  const fake = await startFakeDashClaw({policy:{holdUrlPatterns:['/v1/refunds'], approvalWaitSecondsOverride:1}});
+  try {
+    const governed = governedFor(fake);
+    const recorded = await governed.record({effectId:'fx_21', tool:'stripe.refund_payment', opKey:'refund:pi_21', idempotencyKey:'idem_21'}, refundCtx('run_21'));
+    assert.equal(recorded.state, 'pending');
+    const stillPending = await governed.poll(recorded.actionId);
+    assert.equal(stillPending.expired, false, 'not yet expired: less than a second has passed');
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    const expired = await governed.poll(recorded.actionId);
+    assert.equal(expired.status, 'expired');
+    assert.equal(expired.expired, true);
+  } finally { await fake.close(); }
+});
+
+test('fault hook: failNext("outcome", {status}) fails the next outcome report once, then the same report succeeds (scenario 24)', async () => {
+  const fake = await startFakeDashClaw();
+  try {
+    const governed = governedFor(fake);
+    const recorded = await governed.record({effectId:'fx_24', tool:'stripe.refund_payment', opKey:'refund:pi_24', idempotencyKey:'idem_24'}, refundCtx('run_24'));
+    assert.equal(recorded.state, 'allowed');
+    await governed.claim(recorded.actionId, REFUND_ACT);
+    fake.faults.failNext('outcome', {status:500});
+    await assert.rejects(governed.outcome(recorded.actionId, {status:'completed', summary:'Refund verified.'}), err => err.code === 'GOVERNANCE_UNAVAILABLE');
+    const outcome = await governed.outcome(recorded.actionId, {status:'completed', summary:'Refund verified.'});
+    assert.deepEqual(outcome, {ok:true}, 'the fault was single-shot: the retry with the same report goes through');
+  } finally { await fake.close(); }
+});
 
 // ---------------------------------------------------------------------------------------------------------------------
 // eval/fake-providers.mjs
