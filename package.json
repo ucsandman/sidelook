@@ -25,7 +25,14 @@
     "verify:assistant": "node scripts/verify-assistant.mjs",
     "verify:companion": "node scripts/verify-companion.mjs",
     "verify:states": "node scripts/verify-states.mjs",
-    "verify:mark": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-mark.ps1"
+    "verify:mark": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-mark.ps1",
+    "eval:agent": "node eval/run.mjs",
+    "verify:agent": "node scripts/verify-agent.mjs",
+    "agent:health": "node scripts/agent-health.mjs",
+    "agent:seed": "node scripts/agent-seed.mjs",
+    "agent:setup-dashclaw": "node scripts/agent-setup-dashclaw.mjs",
+    "agent:gmail-auth": "node scripts/gmail-auth.mjs --open",
+    "test:agent-live": "node --test tests/agent-live.test.mjs"
   },
   "license": "MIT",
   "dependencies": {

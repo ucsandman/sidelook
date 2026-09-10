@@ -103,6 +103,7 @@ export function initCompanion({api,getState,updateControls,openWorkflow,stopWork
     if(activity==='Ready'){const model=document.createElement('b');model.textContent=MODEL_LABEL[s.model];$('goes-text').replaceChildren(model,usesCredits(s.model)?' · may use paid credits':isLocal(s.model)?' · on this computer':'');}
     else $('goes-text').textContent=activity;
     $('computer').hidden=!s.computerOn;
+    $('agent').hidden=!s.agentRunning;
     renderStrips();renderMeter();
     $('hide').hidden=!native;$('drag').disabled=!native;
     fitPanel();
@@ -450,6 +451,7 @@ export function initCompanion({api,getState,updateControls,openWorkflow,stopWork
   document.getElementById('settings-preview').onclick=showPreview;
   $('bench').onclick=()=>{if(settings.open)settings.close();showSurface('studio');};$('back').onclick=()=>showSurface('companion');
   $('computer').onclick=()=>openWorkflow('computer','');
+  $('agent').onclick=()=>openWorkflow('agent','');
   $('hide').onclick=()=>{stop();showSurface('dock');};$('drag').onpointerdown=()=>post({type:'drag'});
   $('front').onclick=()=>{if($('targets').hidden)openPicker();else closePicker();};
   document.getElementById('model-choice').addEventListener('change',render);

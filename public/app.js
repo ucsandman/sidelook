@@ -1,6 +1,7 @@
 import { loadProject, saveProject } from './storage.js';
 import { LiveFrames } from './live.js';
 import { initComputer } from './computer.js';
+import { initAgent } from './agent.js';
 import { initCompanion } from './companion.js';
 import { gate, buildLabel, record, ledger, renderGate, renderPreview, MODEL_LABEL, ACCOUNT, MODELS, LOCAL, PROVIDERS, choice, usesCredits, billingLine, adoptLocalModels, isLocal, goesTo } from './harness.js';
 import { DESIGN_CHIPS } from './chips.js';
@@ -745,14 +746,16 @@ async function init() {
   } catch(error) { showError(error.message); }
   await refreshSession();
 }
-// The Computer mode screen lives inside #companion in index.html; both init calls query static markup.
+// The Computer mode and Agent mode screens live inside #companion in index.html; each init call queries static markup.
 const computer=initComputer({api,getSelection:()=>({model:state.model,effort:state.effort,configured:state.configured,token:state.token,remaining:state.remaining}),onState:s=>{state.computerOn=s.on;state.planning=s.planning;notifyState();}});
+const agent=initAgent({api,getSelection:()=>({model:state.model,effort:state.effort,configured:state.configured,token:state.token,remaining:state.remaining}),getState:()=>state,onState:s=>{state.agentOn=s.on;state.agentRunning=s.running;notifyState();}});
 initCompanion({api,getState:()=>state,updateControls,
-  stopWork:()=>{pauseLive('Paused from the companion.');state.controller?.abort();state.setupController?.abort();stopDictation();stopCamera();$('computer-stop')?.click();},
+  stopWork:()=>{pauseLive('Paused from the companion.');state.controller?.abort();state.setupController?.abort();stopDictation();stopCamera();$('computer-stop')?.click();agent.stop();},
   openWorkflow:(kind,instruction='',evidence)=>{
     if(kind==='setup'){openSettings();return;}
     // A reply's "Let Sidelook do this" carries the task; the panel's "Open" carries none and keeps whatever was typed.
     if(kind==='computer'){if(instruction)$('computer-task').value=instruction.slice(0,2000);computer.open();return;}
+    if(kind==='agent'){agent.open();return;}
     $('direction').value=instruction;if(evidence)setImage(evidence.image,evidence.label);else{state.attached=false;renderAttachment();}$('direction').focus();
   },
   importSource:async(html,name)=>{

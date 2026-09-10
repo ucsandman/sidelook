@@ -1,0 +1,50 @@
+/* Agent mode: a screen, not a card. It takes the body and the box; the header stays, like Computer mode. */
+#companion.agent .companion-scroll,#companion.agent .companion-compose{display:none}
+#agent-mode{display:flex;flex-direction:column;flex:1;min-height:0}
+.agent-head{display:flex;align-items:center;gap:6px;padding:0 16px 8px 8px;flex-shrink:0}
+.agent-head strong{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#agent-status{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;text-transform:capitalize}
+.agent-body{overflow:auto;flex:1;min-height:0;padding:4px 16px 12px;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+#agent-goal{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 10px}
+.agent-apps{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 10px}
+.agent-app{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.agent-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .2s var(--ease)}
+.agent-app.accent .agent-dot{background:var(--accent)}
+.agent-app.warn .agent-dot{background:#f2b49e}
+.agent-app.muted .agent-dot{background:var(--muted)}
+#agent-model-line{font-size:12px;color:var(--muted);margin:0 0 10px;line-height:1.45}
+#agent-model-line b{color:var(--ink);font-weight:500}
+.agent-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#agent-mode .button.amber{background:var(--accent);color:var(--on-accent);font-weight:600;padding:8px 14px;border-radius:9px;font-size:14px}
+#agent-mode .button.amber:hover:not(:disabled){background:var(--accent-hover)}
+#agent-error{color:#f2b49e;font-size:12px;margin:8px 0 0}
+#agent-timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.agent-row-item{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:13px}
+.agent-glyph{font-size:13px;width:14px;text-align:center;flex-shrink:0}
+.agent-glyph-ok,.agent-glyph-verified{color:var(--accent)}
+.agent-glyph-blocked,.agent-glyph-rejected,.agent-glyph-failed{color:#f2b49e}
+.agent-glyph-started,.agent-glyph-pending,.agent-glyph-unverified,.agent-glyph-uncertain,.agent-glyph-info{color:var(--muted)}
+.agent-tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+.agent-event-label{flex:1;min-width:140px}
+.agent-event-detail{color:var(--muted);font-size:12px;flex-basis:100%}
+#agent-timeline .agent-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0}
+#agent-timeline .agent-reveal[aria-expanded=true]{color:var(--ink)}
+#agent-timeline pre{max-height:200px;overflow:auto;font-size:12px;line-height:1.45;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:2px 0 0;white-space:pre-wrap;flex-basis:100%}
+#agent-approval,#agent-clarify,#agent-summary{border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--panel)}
+#agent-approval h3,#agent-clarify h3{font:500 15px/1.3 'Segoe UI',sans-serif;margin:0 0 8px}
+#agent-approval-fields{margin:0 0 10px;font-size:13px}
+#agent-approval-fields dt{color:var(--muted);font-size:12px;margin-top:8px}
+#agent-approval-fields dt:first-child{margin-top:0}
+#agent-approval-fields dd{margin:2px 0 0;color:var(--ink)}
+#agent-approval-fields ul{margin:2px 0 0;padding-left:18px;color:var(--ink)}
+#agent-question{margin:0 0 8px;font-size:13px}
+#agent-answer-text{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 8px}
+#agent-summary-line{font-size:14px;font-weight:500;margin:0 0 10px}
+#agent-effects{list-style:none;margin:0 0 10px;padding:0;font-size:13px;color:var(--muted)}
+#agent-effects li{margin:2px 0}
+#agent-final{font-size:12px;color:var(--muted);margin:0}
+#agent-final b{color:var(--ink);font-weight:500}
+.agent-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0}
+#companion #agent-stop{background:#2b313f;color:var(--ink);padding:7px 14px;font-weight:500}
+#companion #agent-stop:hover:not(:disabled){background:#363c4e}
+@media(prefers-reduced-motion:reduce){#agent-mode *{transition:none!important;animation:none!important}}

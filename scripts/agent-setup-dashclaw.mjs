@@ -1,0 +1,138 @@
+// Installs (or removes) the six DashClaw policies Agent mode depends on. Contract: docs/AGENT_MODE_IMPLEMENTATION.md sections 8, 15.
+// node scripts/agent-setup-dashclaw.mjs [--dry-run] [--remove]
+import {existsSync} from 'node:fs';
+import {pathToFileURL} from 'node:url';
+
+const HEADER='x-api-key';
+
+// The six rows, exact names/types/rules from the contract. agent_ids scopes every row to one agent so it never touches another.
+export const SIDELOOK_POLICIES=[
+  {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval'}},
+  {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval'}},
+  {name:'sidelook-agent: block over the ceiling',policy_type:'risk_threshold',rules:{threshold:100,action:'block'}},
+  {name:'sidelook-agent: no fabricated email',policy_type:'non_fabrication',rules:{action_types:['email'],on_violation:'block'}},
+  {name:'sidelook-agent: only api and email',policy_type:'role_constraint',rules:{allowed_action_types:['api','email'],escalate_action:'block'}},
+  {name:'sidelook-agent: writes carry evidence',policy_type:'require_evidence',rules:{action_types:['api','email'],enforcement:'block'}}
+];
+
+export class DashClawSetupError extends Error {
+  constructor(code,message){super(message);this.code=code;}
+}
+
+const safeText=async response=>{try{return await response.text();}catch{return '';}};
+const safeJson=async response=>{try{return await response.json();}catch{return null;}};
+
+// Every row already present in the org, by name. A network or auth failure here aborts the whole run: without this list a
+// missing-row POST cannot be told apart from a duplicate, and the script must never guess.
+async function listExisting({baseUrl,approverKey,fetchImpl}){
+  let response;
+  try{response=await fetchImpl(`${baseUrl}/api/policies`,{headers:{[HEADER]:approverKey}});}
+  catch(error){throw new DashClawSetupError('NETWORK',`Could not reach ${baseUrl}/api/policies: ${error.message}`);}
+  if(!response.ok) throw new DashClawSetupError('LIST_FAILED',`GET /api/policies returned ${response.status}: ${await safeText(response)}`);
+  const body=await safeJson(response);
+  return Array.isArray(body?.policies)?body.policies:[];
+}
+
+function policyBody(policy,agentId){
+  return {name:policy.name,policy_type:policy.policy_type,rules:JSON.stringify(policy.rules),active:1,agent_ids:JSON.stringify([agentId]),created_by:'sidelook-setup'};
+}
+
+// Real DashClaw 409s are not all "duplicate name": the Short List admission path (app/lib/guardrails/short-list.ts) also answers
+// 409 with a typed code when the org's ten interrupting slots are full, or when a no-watch-tier type (non_fabrication,
+// role_constraint here) cannot be demoted. Only a bare 409 with no such code is treated as "this row already exists".
+const SHORT_LIST_CODES=new Set(['SHORT_LIST_FULL','NO_WATCH_TIER']);
+
+async function createOne(policy,{baseUrl,approverKey,agentId,fetchImpl,dryRun}){
+  const body=policyBody(policy,agentId);
+  if(dryRun){
+    console.log(`Would POST /api/policies for "${policy.name}": ${JSON.stringify(body)}`);
+    return {name:policy.name,type:policy.policy_type,status:'would-create'};
+  }
+  let response;
+  try{response=await fetchImpl(`${baseUrl}/api/policies`,{method:'POST',headers:{[HEADER]:approverKey,'content-type':'application/json'},body:JSON.stringify(body)});}
+  catch(error){return {name:policy.name,type:policy.policy_type,status:`failed: ${error.message}`};}
+  if(response.status===409){
+    const errorBody=await safeJson(response);
+    if(errorBody && SHORT_LIST_CODES.has(errorBody.code)) return {name:policy.name,type:policy.policy_type,status:`failed: ${errorBody.error || errorBody.code}`};
+    return {name:policy.name,type:policy.policy_type,status:'present'};
+  }
+  if(!response.ok) return {name:policy.name,type:policy.policy_type,status:`failed: ${response.status} ${await safeText(response)}`};
+  return {name:policy.name,type:policy.policy_type,status:'created'};
+}
+
+async function removeOne(policy,existingByName,{baseUrl,approverKey,fetchImpl,dryRun}){
+  const match=existingByName.get(policy.name);
+  if(!match) return {name:policy.name,type:policy.policy_type,status:'absent'};
+  if(dryRun){
+    console.log(`Would DELETE /api/policies?id=${match.id} for "${policy.name}"`);
+    return {name:policy.name,type:policy.policy_type,status:'would-remove'};
+  }
+  let response;
+  try{response=await fetchImpl(`${baseUrl}/api/policies?id=${encodeURIComponent(match.id)}`,{method:'DELETE',headers:{[HEADER]:approverKey}});}
+  catch(error){return {name:policy.name,type:policy.policy_type,status:`failed: ${error.message}`};}
+  if(response.status===404) return {name:policy.name,type:policy.policy_type,status:'absent'};
+  if(!response.ok) return {name:policy.name,type:policy.policy_type,status:`failed: ${response.status} ${await safeText(response)}`};
+  return {name:policy.name,type:policy.policy_type,status:'removed'};
+}
+
+function printTable(rows){
+  const nameWidth=Math.max(...rows.map(r=>r.name.length),4);
+  const typeWidth=Math.max(...rows.map(r=>r.type.length),4);
+  console.log(`${'name'.padEnd(nameWidth)}  ${'type'.padEnd(typeWidth)}  status`);
+  for(const row of rows) console.log(`${row.name.padEnd(nameWidth)}  ${row.type.padEnd(typeWidth)}  ${row.status}`);
+}
+
+// The one entry point tests drive with a fake fetch: installs the six policies by default, or removes them with remove:true.
+// Never throws on an API failure (a row becomes a `failed:` status instead); only a listing failure (which leaves every row
+// undecidable) short-circuits the whole run. Returns {ok, rows} so a caller can set its own exit code from the return value.
+export async function installDashclawPolicies({baseUrl,approverKey,agentId='sidelook-agent',fetchImpl=fetch,dryRun=false,remove=false}={}){
+  if(!baseUrl || !approverKey){
+    const rows=SIDELOOK_POLICIES.map(p=>({name:p.name,type:p.policy_type,status:'failed: DASHCLAW_BASE_URL and an approver key (DASHCLAW_APPROVER_API_KEY or DASHCLAW_API_KEY) are required'}));
+    printTable(rows);
+    return {ok:false,rows};
+  }
+  let existing;
+  try{existing=await listExisting({baseUrl,approverKey,fetchImpl});}
+  catch(error){
+    const rows=SIDELOOK_POLICIES.map(p=>({name:p.name,type:p.policy_type,status:`failed: ${error.message}`}));
+    printTable(rows);
+    return {ok:false,rows};
+  }
+  const existingByName=new Map(existing.filter(p=>p && typeof p.name==='string').map(p=>[p.name,p]));
+  const rows=[];
+  for(const policy of SIDELOOK_POLICIES){
+    if(remove){rows.push(await removeOne(policy,existingByName,{baseUrl,approverKey,fetchImpl,dryRun}));continue;}
+    const found=existingByName.get(policy.name);
+    rows.push(found?{name:policy.name,type:policy.policy_type,status:'present'}:await createOne(policy,{baseUrl,approverKey,agentId,fetchImpl,dryRun}));
+  }
+  printTable(rows);
+  const ok=rows.every(r=>!r.status.startsWith('failed'));
+  return {ok,rows};
+}
+
+// Same env-loading fallback as lib/agent/index.mjs's createAgentRuntime: prefer lib/agent/config.mjs when Track A has landed it
+// (it owns process.loadEnvFile), fall back to a direct local .env read so this script still runs before that module exists.
+async function loadEnv(){
+  try{const {loadConfig}=await import('../lib/agent/config.mjs');loadConfig();}
+  catch(error){
+    if(error.code!=='ERR_MODULE_NOT_FOUND') throw error;
+    if(existsSync('.env')){
+      try{process.loadEnvFile('.env');}
+      catch(loadError){console.error(`Warning: .env could not be loaded (${loadError.message}); using the process environment as-is.`);}
+    }
+  }
+  return {
+    baseUrl:process.env.DASHCLAW_BASE_URL || '',
+    approverKey:process.env.DASHCLAW_APPROVER_API_KEY || process.env.DASHCLAW_API_KEY || '',
+    agentId:process.env.DASHCLAW_AGENT_ID || 'sidelook-agent'
+  };
+}
+
+async function main(){
+  const dryRun=process.argv.includes('--dry-run'),remove=process.argv.includes('--remove');
+  const {baseUrl,approverKey,agentId}=await loadEnv();
+  const {ok}=await installDashclawPolicies({baseUrl,approverKey,agentId,dryRun,remove});
+  process.exitCode=ok?0:1;
+}
+
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) await main();

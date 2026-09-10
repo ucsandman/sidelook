@@ -27,7 +27,7 @@ const clock=value=>new Date(value).toLocaleTimeString([],{hour:'numeric',minute:
 // What Sidelook is doing right now, and what the sensors are doing. Both computed from live state, never from a literal at a call site.
 export const activityLine=(v={})=>v.dictating?'Listening':v.thinking?'Thinking':v.capturing?'Choosing a frame':v.busy?`Building · ${v.elapsed || 0}s`:v.planning?'Planning the next action'
   :v.live?`Live build on · ${v.liveCount || 0} of 10 sent`:v.setupBusy?'Setting up':v.checking?'Checking connection':!v.token?'Reconnect in Settings':!v.configured?'Sign in through Settings'
-  :v.remaining===0?'Allowance used · open Settings':v.computerOn?'Computer mode on · Ctrl+Shift+F12 stops it':'Ready';
+  :v.remaining===0?'Allowance used · open Settings':v.agentRunning?'Agent mode on · Stop ends the run':v.computerOn?'Computer mode on · Ctrl+Shift+F12 stops it':'Ready';
 // Sensor words come first. While the Screen on lease runs, the line says so with the countdown; dictation joins it rather than replacing it.
 export const sensorLine=(v={})=>v.screenOn?`screen on · ${v.dictating?'mic on (local)':v.snapshots?'fresh screenshots':'following clicks'}${v.remaining?` · ${v.remaining}`:''}`
   :v.dictating?'mic on (local)':v.stream?v.captureKind==='screen'?'screen shared (local preview)':'camera on (local preview)':'screen & mic off';
@@ -92,6 +92,6 @@ export function renderPreview(dialog,manifest,entries=ledger) {
   if(title) title.textContent=manifest?.title || 'What goes with the next send';
   if(fields) fields.replaceChildren(...(manifest?.fields || []).flatMap(([label,value])=>{const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=value;return [dt,dd];}));
   if(body) body.textContent=manifest?.body?JSON.stringify(manifest.body,null,1):'';
-  if(rows) rows.replaceChildren(...entries.map(entry=>{const li=document.createElement('li');li.textContent=`${clock(entry.at)} · ${entry.surface==='build'?'studio build':entry.surface==='computer'?'computer plan':'message'} · ${MODEL_LABEL[entry.model] || entry.model || 'Astra'} · ${entry.effort || 'medium'}${entry.ok===false?` · ${entry.outcome==='stopped'?'stopped':'refused'}, nothing reached the model`:` · ${entry.frame?'frame sent':'no frame'}${entry.text?' · window text sent':''}${Number.isFinite(entry.remaining)?` · ${entry.remaining} left`:''}`}`;if(entry.ok===false)li.className='refused';return li;}));
+  if(rows) rows.replaceChildren(...entries.map(entry=>{const li=document.createElement('li');li.textContent=`${clock(entry.at)} · ${entry.surface==='build'?'studio build':entry.surface==='computer'?'computer plan':entry.surface==='agent'?'agent run':'message'} · ${MODEL_LABEL[entry.model] || entry.model || 'Astra'} · ${entry.effort || 'medium'}${entry.ok===false?` · ${entry.outcome==='stopped'?'stopped':'refused'}, nothing reached the model`:` · ${entry.frame?'frame sent':'no frame'}${entry.text?' · window text sent':''}${Number.isFinite(entry.remaining)?` · ${entry.remaining} left`:''}`}`;if(entry.ok===false)li.className='refused';return li;}));
   if(empty) empty.hidden=entries.length>0;
 }

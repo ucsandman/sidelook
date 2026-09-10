@@ -10,6 +10,7 @@
   <link rel="icon" href="/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/companion.css">
+  <link rel="stylesheet" href="/agent.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -139,7 +140,7 @@
         <span class="companion-grip" id="companion-grip" title="Drag to make the box taller"></span>
       </form>
       <p id="companion-note" class="companion-note" hidden></p>
-      <p class="companion-goes" id="companion-goes"><span id="companion-goes-text"></span><button type="button" class="quiet" id="companion-computer" hidden>Open</button><button type="button" class="quiet" id="companion-preview">What goes</button></p>
+      <p class="companion-goes" id="companion-goes"><span id="companion-goes-text"></span><button type="button" class="quiet" id="companion-computer" hidden>Open</button><button type="button" class="quiet" id="companion-agent" hidden>Open</button><button type="button" class="quiet" id="companion-preview">What goes</button></p>
       <p class="companion-running" id="companion-running" hidden><i aria-hidden="true"></i><span id="companion-activity" role="status"></span><button type="button" id="companion-stop">Stop</button></p>
     </div>
     <div class="companion-edges" aria-hidden="true"><i data-edge="top"></i><i data-edge="bottom"></i><i data-edge="left"></i><i data-edge="right"></i></div>
@@ -167,12 +168,51 @@
         <footer class="computer-foot"><span>Ctrl+Shift+F12 stops from any app</span><button type="button" id="computer-stop">Stop control</button></footer>
       </div>
     </section>
+    <section id="agent-mode" class="agent-mode" aria-label="Agent mode" hidden>
+      <div class="agent-head"><button type="button" class="quiet" id="agent-back">‹ Back</button><strong id="agent-title">Agent mode</strong><span id="agent-status"></span></div>
+      <div class="agent-body">
+        <section id="agent-start">
+          <textarea id="agent-goal" maxlength="2000" rows="4" aria-label="What should the agent accomplish?" placeholder="Resolve Acme's cancellation request: refund the most recent eligible payment, update the CRM, and email them confirmation."></textarea>
+          <div class="agent-apps" id="agent-apps" role="list" aria-label="Connected apps">
+            <span class="agent-app muted" id="agent-app-slack"><i class="agent-dot" aria-hidden="true"></i>Slack</span>
+            <span class="agent-app muted" id="agent-app-stripe"><i class="agent-dot" aria-hidden="true"></i>Stripe</span>
+            <span class="agent-app muted" id="agent-app-hubspot"><i class="agent-dot" aria-hidden="true"></i>HubSpot</span>
+            <span class="agent-app muted" id="agent-app-gmail"><i class="agent-dot" aria-hidden="true"></i>Gmail</span>
+            <span class="agent-app muted" id="agent-app-dashclaw"><i class="agent-dot" aria-hidden="true"></i>DashClaw</span>
+          </div>
+          <p id="agent-model-line"><b id="agent-model-label"></b> · Every write goes through DashClaw.</p>
+          <div class="agent-row"><button type="button" class="button amber" id="agent-start-button">Start</button></div>
+          <p id="agent-error" role="alert" hidden></p>
+        </section>
+        <section id="agent-run" hidden>
+          <ol id="agent-timeline"></ol>
+          <section id="agent-approval" hidden aria-label="DashClaw policy approval">
+            <h3>DashClaw policy approval</h3>
+            <dl id="agent-approval-fields"></dl>
+            <div class="agent-row"><button type="button" class="button amber" id="agent-approve">Approve</button><button type="button" class="quiet" id="agent-reject">Reject</button></div>
+          </section>
+          <section id="agent-clarify" hidden aria-label="The agent needs an answer">
+            <h3>The agent needs an answer</h3>
+            <p id="agent-question"></p>
+            <textarea id="agent-answer-text" maxlength="2000" aria-label="Your answer"></textarea>
+            <div class="agent-row"><button type="button" class="button amber" id="agent-answer">Answer</button></div>
+          </section>
+          <section id="agent-summary" hidden aria-label="Run summary">
+            <p id="agent-summary-line"></p>
+            <ol id="agent-effects"></ol>
+            <p id="agent-final" hidden><b>The agent said</b> <span id="agent-final-text"></span></p>
+          </section>
+        </section>
+      </div>
+      <footer class="agent-foot"><span>Ctrl+Shift+F12 stops from any app</span><button type="button" id="agent-stop">Stop</button></footer>
+    </section>
   </section>
 
   <dialog id="settings" class="settings" aria-labelledby="settings-title">
     <div class="settings-head"><h2 id="settings-title">Settings</h2><button class="quiet" id="settings-close" data-close="settings">Back</button></div>
     <section class="settings-section settings-more" aria-label="Do more">
       <button class="quiet" id="computer-open">Computer mode · let Sidelook work in one Windows app, one approved action at a time</button>
+      <button class="quiet" id="agent-open">Agent mode · give Sidelook a business outcome across Slack, Stripe, HubSpot and Gmail</button>
     </section>
     <section class="settings-section" aria-label="Model">
       <label class="settings-field" for="model-choice">Model <select id="model-choice"></select></label>
