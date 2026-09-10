@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Computer mode plans the next step after every approved action. Approve runs one action, reads the window back locally, then sends the task and a fresh reading to the model so the next proposal is waiting for you. One Approve per action instead of Plan then Approve. Reject or Stop ends the loop; every action still waits for its own Approve and the 20-step cap holds.
+- Plan next action works with no window chosen. Nothing is read; only the task goes, and the model can propose only opening Notepad, Calculator or Paint, or a report. The broker refuses any other action without a window.
+- An approved launch finds its window: the window list is read again (titles only) until a new one appears, and it becomes the chosen window. Before, the screen asked you to refresh the list and pick it yourself.
+- The chat no longer says it will "set up" a desktop action. It cannot; its prompt now says so and points at the Let Sidelook do this button, which opens Computer mode with the task filled in.
+
 ## 0.17.0: Local models, the Bench button, and three words under the conversation
 
 - Three words under the conversation: New chat, Clear context, Compact. New chat is the old Clear conversation from Settings, moved where you need it. Clear context leaves the messages on screen and sends none of them with the next message. Compact is one send that trades the earlier messages for a summary under 150 words, and a line saying what it saved.

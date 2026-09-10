@@ -69,7 +69,7 @@ export function initComputer({api,getSelection,onState}) {
     work(async(signal,current)=>{
       const result=await call('enable',{consent:true},signal);if(!current())return;
       owner=result.owner;deadline=result.expires;lease.close();$('work').hidden=false;show(true);$('history').replaceChildren();count();showOutcome(null);notify();
-      await windows(signal);status('Choose a window. Ctrl+Shift+F12 stops control from any app.');
+      await windows(signal);status('Choose a window, or say the task and let the model open the app. Ctrl+Shift+F12 stops control from any app.');
       ticks=0;
       ticker=setInterval(async()=>{
         if(!owner)return;
@@ -98,15 +98,16 @@ export function initComputer({api,getSelection,onState}) {
   $('preview').onclick=()=>{
     const sel=getSelection();
     renderPreview(preview,{title:'What goes with Plan next action',fields:[
-      ['Task',$('task').value.trim() || '(nothing typed yet)'],['Window',windowTitle() || '(none chosen)'],
-      ['Fresh reading','the window’s accessible controls and text, read when you press Plan next action'],['Recent actions',`${$('history').children.length} from this session`],
+      ['Task',$('task').value.trim() || '(nothing typed yet)'],['Window',windowTitle() || '(none chosen · the model can only propose opening Notepad, Calculator or Paint)'],
+      ['Fresh reading',windowTitle()?'the window’s accessible controls and text, read when you press Plan next action':'nothing: no window is chosen, so nothing is read'],['Recent actions',`${$('history').children.length} from this session`],
       ['Model',`${MODEL_LABEL[sel.model]} · ${sel.effort}`],['Goes to',`your ${ACCOUNT[sel.model]} subscription through ${CLI[sel.model]}`]],
       body:{op:'propose',task:$('task').value,window:$('window').value,model:sel.model,effort:sel.effort,consent:true}},ledger);
     preview.showModal();
   };
-  $('next').onclick=()=>work(async(signal,current)=>{
+  // One model step: a fresh reading of the chosen window (or none) and the task go to the model, and one proposal comes back for review.
+  // Pressed by hand, or run once after an approved action so the next proposal is waiting instead of a button.
+  async function plan(signal,current,afterApprove=false){
     const sel=getSelection();
-    if(!$('window').value)throw new Error('Choose the window first.');
     if(!$('task').value.trim())throw new Error('Say what Sidelook should do first.');
     const refusal=gate({surface:'computer',configured:sel.configured,token:sel.token,remaining:sel.remaining});
     if(refusal)throw new Error(refusal);
@@ -117,7 +118,7 @@ export function initComputer({api,getSelection,onState}) {
     catch(error){record({surface:'computer',ok:false,outcome:'refused',frame:false,model:sel.model,effort:sel.effort,remaining:sel.remaining});throw error;}
     finally{clearInterval(timer);planning=false;notify();}
     if(!current())return;
-    showOutcome(null);
+    if(!afterApprove)showOutcome(null);
     const action=result.proposal;proposal=action.kind==='done'?null:action;
     $('review').hidden=false;$('step-label').textContent=action.kind==='done'?`Step ${result.steps} of 20 · the model’s report`:`Step ${result.steps} of 20 · waiting for you`;
     $('action-title').textContent=action.kind==='done'?'Model report':`${action.kind.toUpperCase()} · ${action.name || action.app || action.title}`;
@@ -128,9 +129,10 @@ export function initComputer({api,getSelection,onState}) {
     $('diagnostics').textContent=`Automation ID: ${action.automationId || '(none)'}\nControl reference: ${action.element || '(window)'}\nParent: ${action.context || '(none)'}\nState: ${action.state || '(none)'}\n\nSENT WITH THIS MODEL STEP · ${result.snapshot.title}\n${treeText(result.snapshot.elements)}`;
     collapse($('details'),$('diagnostics'));$('details').hidden=action.kind==='done';
     $('expiry').textContent=action.kind==='done'?'Check the application yourself to confirm the outcome.':'Expires in one minute. Check the target before you approve.';
-    $('approve').hidden=action.kind==='done';status(action.kind==='done'?'Review the model’s report.':'Nothing has executed. Approve runs this one action.');
+    $('approve').hidden=action.kind==='done';status(action.kind==='done'?'Review the model’s report.':'Nothing has executed. Approve runs this one action, then plans the next.');
     $('review').scrollIntoView({block:'nearest'});
-  });
+  }
+  $('next').onclick=()=>work(plan);
   $('approve').onclick=()=>work(async(signal,current)=>{
     const action=proposal;if(!action)throw new Error('Request a fresh action.');
     // The proposal stays until Windows accepts it, so a busy broker (a read in flight) leaves it approvable.
@@ -139,9 +141,13 @@ export function initComputer({api,getSelection,onState}) {
     const observation=done.observation && typeof done.observation.summary==='string'?done.observation:{available:false,summary:'No reading came back.'};
     log(`${action.kind} · ${action.name || action.app || action.title}: Windows accepted the action. ${observation.summary}`);clearProposal();
     showOutcome(action,observation);
-    status(observation.available?'Delivered and read back locally. Plan the next action when you are ready.':'Delivered. Verification was unavailable; check the app yourself before planning the next action.');
+    // A launch that found its window makes it the chosen one, so the next step reads it. The title changes to say so.
+    if(observation.launched){await windows(signal);if(!current())return;$('window').value=observation.launched.id;showRead('');controls();}
+    status(observation.available?'Delivered and read back locally. Planning the next step…':'Delivered. Verification was unavailable; check the app before you approve the next step.');
+    // The next proposal is planned now, so the loop is one yes per action instead of two presses. Reject or Stop ends it; nothing runs without Approve.
+    await plan(signal,current,true);
   });
-  $('reject').onclick=()=>work(async signal=>{await call('reject',{},signal);clearProposal();status('Action rejected. Change the task or plan another action.');});
+  $('reject').onclick=()=>work(async signal=>{await call('reject',{},signal);clearProposal();status('Action rejected. Nothing more is planned until you press Plan next action.');});
   window.addEventListener('pagehide',()=>{controller?.abort();if(owner)api('/api/computer',{op:'stop'},undefined,true).catch(()=>{});});
   controls();return {state:()=>({on:!!owner,planning}),open};
 }

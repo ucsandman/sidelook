@@ -7,10 +7,10 @@ It is a screen of its own inside the companion panel, entered from Settings, **C
 ## Use it
 
 1. Settings, **Computer mode**. The lease dialog explains the ten minutes; allow local inspection and press **Start 10 minutes**.
-2. Open Notepad, Calculator or Paint from the app selector, or pick a supported window that's already open. **Refresh** when apps change. The screen's title becomes "Sidelook in" that window.
+2. Pick a supported window that's already open, or leave it on "Choose a window" and let the model propose opening Notepad, Calculator or Paint as its first action. The app selector opens one by hand. **Refresh** when apps change. The screen's title becomes "Sidelook in" that window.
 3. **Read it** reads accessible text locally and shows it under "What Sidelook read". That includes editable values. Password controls and protected windows are excluded. Some controls are unnamed or unavailable.
 4. Model and effort come from **Settings**. Describe the task and press **Plan next action**. The line under the button names the window whose fresh reading goes with the task, and **What goes** shows the body. There is no tick: the button is the consent. Planning reads the window again, so the text it sends can differ from your earlier reading, and the exact sent text comes back under "What Sidelook read".
-5. Check the action, target name, type, parent, identifiers, text replacement and shortcut. **Approve** delivers one operation. **Reject** delivers nothing. Plan the next action to see the result and continue. A completion report is the model's read of things. Check the app yourself.
+5. Check the action, target name, type, parent, identifiers, text replacement and shortcut. **Approve** delivers one operation, reads the window back, then plans the next step so the next proposal is waiting for you. **Reject** delivers nothing and ends the loop until you press Plan next action. Every action still waits for its own Approve. A completion report is the model's read of things. Check the app yourself.
 6. **Stop control**, or press **Ctrl+Shift+F12** from any app. The panel's Stop button stops it too. Closing the page also requests Stop. The native lease expires after ten minutes even if the browser drops the connection. Stop can't undo a delivered operation or refund a model request.
 
 ## What works
@@ -23,7 +23,7 @@ It is a screen of its own inside the companion panel, entered from Settings, **C
 | Scroll | Accessible scroll containers, one large up/down increment. |
 | Keys | Enter, Tab, Escape, arrows, Save, Select all, Backspace and Delete, after proven target focus. |
 | Focus | Requests foreground focus for the selected window. Refuses if Windows doesn't grant it. |
-| Open | Fixed Windows executables or registered app IDs for Notepad, Calculator and Paint. Select the new window afterward. |
+| Open | Fixed Windows executables or registered app IDs for Notepad, Calculator and Paint. After an approved launch the new window in the list becomes the chosen one; it is read only when the next step is planned. |
 
 Explorer, terminals, sign-in and protected windows, password controls and address or command controls are excluded. Browser and custom app accessibility can be incomplete. Paint's accessible menus work, its drawing canvas doesn't. There's no OCR, arbitrary mouse movement, drag-and-drop, shell tool, arbitrary executable path, administrator prompt handling, or any guarantee that a given app supports these patterns.
 
@@ -41,7 +41,7 @@ Everything is reviewed because a UI click or key can send, purchase, delete or r
 | `inspect` | `owner`, `window` | Local bounded accessibility snapshot |
 | `launch` | `owner`, fixed `app` | Explicit app-open result |
 | `propose` | `owner`, `window`, `task`, `model`, `effort`, `consent: true` | One proposal, its exact sent snapshot and step count |
-| `approve` | `owner`, proposal `id`, `consent: true` | One native result plus `observation`: one bounded local reading of the same window taken after Windows accepted the action (`available`, `summary`, the target control, what changed, the reading), or `available: false` with why. Never a second action, never a model call, never for a launch. The ID is consumed before execution |
+| `approve` | `owner`, proposal `id`, `consent: true` | One native result plus `observation`: one bounded local reading of the same window taken after Windows accepted the action (`available`, `summary`, the target control, what changed, the reading), or `available: false` with why. For a launch, the window list is read again until a new window appears and `launched` names it; no tree is read. Never a second action, never a model call. The ID is consumed before execution |
 | `reject` | `owner` | Discards the pending proposal |
 | `status` | Normal local session authentication | Armed state and step count |
 | `stop` | Normal local session authentication | Revokes control across tabs |

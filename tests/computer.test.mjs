@@ -71,7 +71,7 @@ test('approve reads the same window once afterwards and reports what it saw, nev
   assert.equal(done.observation.reading.elements.length,2);assert.equal(acts.length,1);
   assert.equal(c.history.at(-1).result,'Windows accepted the action. Observed: 1 new · Result = 42.');
 });
-test('an observation that fails says so and never replays the action; a launch is never inspected on its own',async()=>{
+test('an observation that fails says so and never replays the action; a launch finds the new window in the list and never reads inside it',async()=>{
   const {computer:c,acts,native}=fixture();const ops=[];const call=native.call.bind(native);
   native.call=async d=>{ops.push(d.op);if(d.op==='snapshot' && acts.length)throw new Error('window gone');return call(d);};
   const owner=await enable(c);const {proposal}=await c.handle(request(owner));ops.length=0;
@@ -79,10 +79,27 @@ test('an observation that fails says so and never replays the action; a launch i
   assert.deepEqual(ops,['status','act','snapshot']);assert.equal(acts.length,1,'no retry');
   assert.equal(done.observation.available,false);assert.match(done.observation.summary,/could not be read after the action/);
   assert.match(c.history.at(-1).result,/^Windows accepted the action\. The window could not be read/);
-  const l=fixture(async()=>({result:{...proposed,kind:'launch',element:'',app:'notepad'}}));const lops=[];const lcall=l.native.call.bind(l.native);l.native.call=async d=>{lops.push(d.op);return lcall(d);};
+  const l=fixture(async()=>({result:{...proposed,kind:'launch',element:'',app:'notepad'}}));const lops=[];const lcall=l.native.call.bind(l.native);
+  l.native.call=async d=>{lops.push(d.op);if(d.op==='windows' && l.acts.length)return {windows:[{id:'42:7:8',title:'Fixture'},{id:'9:9:9',title:'  Padded title  '},{id:'77:1:1',title:'Untitled - Notepad'}]};return lcall(d);};
   const lowner=await enable(l.computer);const {proposal:lp}=await l.computer.handle(request(lowner));lops.length=0;
   const opened=await l.computer.handle({op:'approve',owner:lowner,id:lp.id,consent:true});
-  assert.deepEqual(lops,['status','act'],'no reading after a launch');assert.equal(opened.observation.available,false);assert.match(opened.observation.summary,/choose it yourself/);
+  assert.deepEqual(lops,['status','windows','act','windows'],'the list before and after, never a snapshot');assert.equal(opened.observation.available,true);
+  assert.deepEqual(opened.observation.launched,{id:'77:1:1',title:'Untitled - Notepad'});assert.equal(opened.observation.summary,'Opened "Untitled - Notepad". It is now the chosen window.');
+  assert.equal(l.computer.target,'77:1:1','the next plan for the same task keeps its history');
+  const n=fixture(async()=>({result:{...proposed,kind:'launch',element:'',app:'notepad'}}));n.computer.observeTimeout=60;
+  const nowner=await enable(n.computer);const {proposal:np}=await n.computer.handle(request(nowner));
+  const missed=await n.computer.handle({op:'approve',owner:nowner,id:np.id,consent:true});
+  assert.equal(missed.observation.available,false);assert.match(missed.observation.summary,/No new window appeared in time/);
+});
+test('a plan with no window chosen reads nothing and can only propose a launch or a report',async()=>{
+  const seen=[];const {computer:c,native}=fixture(async r=>{seen.push(JSON.parse(r.prompt));return {result:{...proposed,kind:'launch',element:'',app:'notepad',reason:'Notepad is not open.'}};});
+  const ops=[];const call=native.call.bind(native);native.call=async d=>{ops.push(d.op);return call(d);};
+  const owner=await enable(c);const {proposal}=await c.handle({...request(owner),window:''});
+  assert.equal(proposal.kind,'launch');assert.equal(proposal.app,'notepad');assert.deepEqual(ops,['arm','status'],'no snapshot without a window');
+  assert.deepEqual(seen[0].snapshot,{title:'',elements:[],none:true});
+  const click=fixture(async()=>({result:proposed}));const cowner=await enable(click.computer);
+  await assert.rejects(click.computer.handle({...request(cowner),window:''}),/No window is chosen/);assert.equal(click.acts.length,0);
+  const {proposal:again}=await c.handle({...request(owner)});assert.equal(again.kind,'launch','a chosen window still allows a launch');
 });
 test('a reading that hangs is reported as unread within its own bound, shorter than an action, with no replay',async()=>{
   const {computer:c,acts,native}=fixture();c.observeTimeout=40;const call=native.call.bind(native);let hung=0;
