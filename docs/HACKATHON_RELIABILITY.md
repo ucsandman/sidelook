@@ -211,9 +211,17 @@ defect.
 
 ## Live results
 
-No live run has been recorded yet. This table is filled in by hand after Demo A, B and C run end to end against
-real Slack, Stripe, HubSpot, Gmail and DashClaw accounts, per `docs/HACKATHON_DEMO.md`. Fixture runs above never
-count toward this table.
+Fixture runs above never count toward this section. What has been exercised against real services, and what has not, as of 2026-09-10:
+
+| Check | Services | Result |
+| --- | --- | --- |
+| `RUN_LIVE_AGENT_TESTS=1 npm run test:agent-live`, Stripe round trip through the real engine | Stripe test mode, DashClaw (hosted instance, version 5.36.0) | A $1.00 test payment was refunded through `executeWrite`: DashClaw held the action under `sidelook-agent: refunds need a human`, the approval was submitted with the separate admin key, the execution claim was confirmed, Stripe accepted the refund and the read-back verified it (`re_3UE9imGkYlHdERrc1zmxxF8c` on `pi_3UE9imGkYlHdERrc1ccibG1h`). 7.4 s. |
+| Non-fabrication, live | DashClaw | `We refunded $9,999.00` was blocked (`missing_required`, `money: $9,999.00`); the honest sentence with the customer name, `$1.00` and the refund id passed. |
+| Health | Stripe, DashClaw | `ready: yes`, Stripe test mode, approver role admin, 4 of 6 Sidelook policies installed (the two defence-in-depth rows need Short List slots; see `docs/HACKATHON_SETUP.md`). |
+| One real model turn | Claude Code, Haiku 4.5, low effort | The planner's first plan for the demo goal came back valid in 9.1 s: `slack.find_customer_request` for Acme. |
+| One real run through the server | Claude Code, Stripe test mode | With Slack unconfigured the agent read Stripe, found two customers for the demo address (a seed run twice before the exact-email lookup was fixed) and asked which one; it did not guess. The duplicate has since been removed by the seed. |
+
+Not yet exercised live: Slack, HubSpot and Gmail (no credentials on this machine), and therefore Demo A, B and C end to end. The table below is filled in by hand after they run per `docs/HACKATHON_DEMO.md`.
 
 | Demo | Goal | Terminal status | Writes verified | Approval decision | Notes |
 | --- | --- | --- | --- | --- | --- |
