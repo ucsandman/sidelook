@@ -138,8 +138,12 @@ test('stripe.get_recent_payments picks the newest refundable payment and records
     {id:'pi_new',chargeId:'ch_new',amountCents:48500,currency:'usd',created:'2026-08-14T00:00:00.000Z',description:'new',refundable:true}
   ];}}};
   const r=run();
+  // Payments are listed only for the customer the run resolved; any other id is refused before a request goes out.
+  const refused=await READ_HANDLERS['stripe.get_recent_payments']({args:{customerId:'cus_1'},run:r,providers,now:()=>Date.now()});
+  assert.equal(refused.ok,false);assert.equal(refused.error.code,'CUSTOMER_NOT_RESOLVED');
+  r.entities.stripeCustomer={id:'cus_1',email:'acme@example.com',name:'Acme'};
   const obs=await READ_HANDLERS['stripe.get_recent_payments']({args:{customerId:'cus_1'},run:r,providers,now:()=>Date.now()});
-  assert.equal(obs.chosen,'pi_new');
+  assert.equal(obs.chosen,'pi_new');assert.equal(r.entities.payment.customerId,'cus_1');assert.equal(r.entities.payment.amountRefundedCents,0);
   assert.equal(r.entities.payment.id,'pi_new');
   assert.equal(r.sourceFacts.find(f=>f.key==='payment_amount').value,'$485.00');
   assert.equal(r.sourceFacts.find(f=>f.key==='payment_date').value,'2026-08-14');

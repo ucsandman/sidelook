@@ -27,9 +27,10 @@ DashClaw is what decides whether a Stripe refund or a Gmail send may actually ha
 Where the agent reads the customer's request.
 
 1. **One-time.** At api.slack.com, create an app "from scratch" in your workspace.
-2. **One-time.** Under **OAuth & Permissions**, add bot token scopes `channels:history`, `channels:read`, `chat:write`, `users:read`. `chat:write` is only used by the seed script (`SLACK_SEED_CHANNEL`), not by the agent itself.
+2. **One-time.** Under **OAuth & Permissions**, add bot token scopes `channels:history`, `channels:read`, `chat:write`, `users:read`. `chat:write` is used only by `npm run agent:seed` to post the demo customer's request into `SLACK_SEED_CHANNEL`; the agent itself only reads (`channels:history`, `channels:read`).
 3. **One-time.** Install the app to the workspace and copy the **Bot User OAuth Token** into `SLACK_BOT_TOKEN`.
 4. **Per demo (or one-time if you keep a fixed channel).** Invite the bot to the channel(s) it should search (`/invite @your-app-name` in each channel), and set `SLACK_CHANNELS` to the comma-separated channel names or ids.
+5. **Per demo (or one-time if you keep a fixed channel).** Invite the bot to the channel `npm run agent:seed` should post the demo request into, and set `SLACK_SEED_CHANNEL` to its name or id (not in `.env.example`; add it to `.env` by hand). It can be the same channel as `SLACK_CHANNELS` or a separate one.
 
 ## 3. Stripe
 
@@ -37,7 +38,7 @@ Test mode only. Agent mode never writes to a live Stripe account unless `STRIPE_
 
 1. **One-time.** In the Stripe dashboard, switch to **test mode**, then **Developers → API keys → Create restricted key**. Grant exactly: Customers (read), Payment Intents (read), Charges (read), Refunds (write), Balance (read). Nothing else.
 2. **One-time.** Put the restricted key in `STRIPE_SECRET_KEY` (it starts `rk_test_`; a plain secret key `sk_test_...` also works if you'd rather not scope permissions by hand). Leave `STRIPE_ALLOW_LIVE` unset.
-3. **Per demo.** Create a test customer with a real name and email, and give it one **succeeded** payment (test card `4242 4242 4242 4242` in Checkout or a PaymentIntent confirmed directly) so there's something refundable. `npm run agent:seed` does this for `AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN` if you'd rather not click through the dashboard.
+3. **Per demo.** Create a test customer with a real name and email, and give it one **succeeded** payment (test card `4242 4242 4242 4242` in Checkout or a PaymentIntent confirmed directly) so there's something refundable. `npm run agent:seed` does this for `AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN` (default Acme / acme.com) if you'd rather not click through the dashboard; see section 6.
 
 ## 4. HubSpot
 
@@ -62,11 +63,12 @@ Test mode only. Agent mode never writes to a live Stripe account unless `STRIPE_
 
 | Command | What it does | Cadence |
 | --- | --- | --- |
-| `npm run agent:health` | Checks all five integrations (Slack, Stripe, HubSpot, Gmail, DashClaw) and prints what's configured, what's reachable, and what's missing. | Run any time; safe to run repeatedly. |
-| `npm run agent:seed` | Creates the demo customer's Slack message, Stripe customer and payment, and HubSpot contact so a run has something real to find. | **Per demo.** |
+| `npm run agent:health` | Prints one line per integration (Slack, Stripe, HubSpot, Gmail, DashClaw): `ok` or `FAIL` and a detail string, the DashClaw line adding the approver role and whether the non-fabrication policy is present. `ready: yes` means every *configured* app answered; an app you haven't set up yet doesn't count against it. `--json` prints the raw health object and sets the exit code from `ready` instead. | Run any time; safe to run repeatedly, makes no writes. |
+| `npm run agent:seed` | Creates the demo customer (`AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN`, default Acme / acme.com) in Stripe (one succeeded, refundable $485.00 payment) and HubSpot (a contact with the status property set away from the target value), and posts the cancellation request into `SLACK_SEED_CHANNEL` if that's set. Idempotent: safe to run again before every demo, refuses to touch a live Stripe key. Gmail gets a profile read only, never a message. `npm run agent:seed -- --reset` re-seeds only Stripe and HubSpot, the two states a demo run actually changes; Slack and Gmail need nothing redone between demos. | **Per demo** (plain), **between demo runs** (`--reset`). |
 | `npm run agent:setup-dashclaw` | Installs the six DashClaw policies (section 1 above). | **One-time per DashClaw org**, safe to repeat. |
-| `npm run eval:agent` | Runs the fixture-backed scenario suite against a real `AgentRuntime` and a fake DashClaw/Slack/Stripe/HubSpot/Gmail — no real credentials or network calls. | Any time; this is the regression suite, not a live check. |
-| `RUN_LIVE_AGENT_TESTS=1 npm run test:agent-live` | Runs the tests that hit your real, configured integrations. Skips itself (not a failure) when the flag is unset. | **Per demo**, after seeding, to prove the real accounts are wired correctly. |
+| `npm run eval:agent` | Runs the fixture-backed scenario suite against a real `AgentRuntime` and a fake DashClaw/Slack/Stripe/HubSpot/Gmail; no real credentials or network calls. | Any time; this is the regression suite, not a live check. Numbers from a real run: `docs/HACKATHON_RELIABILITY.md`. |
+| `npm run agent:gmail-auth` | The one-time Gmail OAuth loopback flow (section 5). | **One-time**, repeat only if the refresh token is revoked. |
+| `RUN_LIVE_AGENT_TESTS=1 npm run test:agent-live` | Runs real round trips: health readiness; a Stripe refund on a fresh $1.00 test payment through the real governed engine, approved with the DashClaw approver key; a HubSpot property round trip on the seeded contact (set to the target value, then restored); a Gmail send to `GMAIL_FROM` itself found back by Message-ID; a DashClaw non-fabrication check that blocks a fabricated amount and passes the real facts. Skips itself (`t.skip`, exit 0) when the flag is unset — this is what CI runs. Each test names the record ids it creates. | **Per demo**, after seeding, to prove the real accounts are wired correctly. |
 
 ## Windows PowerShell: setting one env var for one command
 

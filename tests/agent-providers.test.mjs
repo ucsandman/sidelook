@@ -13,7 +13,7 @@ const jsonResponse=(status,body,headers={})=>({ok:status>=200 && status<300,stat
 // ---------- http.mjs: the failure taxonomy and the retry primitives every provider relies on ----------
 
 test('request() classifies HTTP status codes into the taxonomy from section 14',async()=>{
-  const cases=[[401,'AUTH',false],[403,'AUTH',false],[404,'NOT_FOUND',false],[429,'RATE_LIMIT',false],[500,'SERVER',true],[502,'SERVER',true],[400,'INVALID',false],[409,'INVALID',false],[422,'INVALID',false]];
+  const cases=[[401,'AUTH',false],[403,'AUTH',false],[404,'NOT_FOUND',false],[429,'RATE_LIMIT',true],[500,'SERVER',true],[502,'SERVER',true],[400,'INVALID',false],[409,'CONFLICT',true],[422,'INVALID',false]];
   for(const [status,code,sentRequest] of cases){
     const fetchImpl=async()=>jsonResponse(status,{error:'boom'});
     await assert.rejects(request({url:'https://x.example',fetchImpl,label:'probe'}),error=>{

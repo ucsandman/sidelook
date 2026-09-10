@@ -21,6 +21,13 @@ It's experimental and built around how I work. Anthropic models can burn paid Cl
 
 ## What it does
 
+| Surface | What it's for |
+| --- | --- |
+| Companion chat | Ask about the window in front of you and get a screenshot-grounded answer. |
+| Builder (the studio) | Turn a sketch or a shared design window into a working prototype. |
+| Computer mode | Drive one Windows app's accessible controls, one approved action at a time. |
+| Agent mode | Give Sidelook a business outcome across Slack, Stripe, HubSpot and Gmail; every write is governed by DashClaw. |
+
 **Why a ghost.** Sidelook is one node of the Practical Systems mark. Karpathy called these models ghosts, not animals: trained by imitating human documents, they see nothing until shown something. Sidelook is summoned, looks at what you show it, and goes. Its eyes follow your mouse; nothing else does.
 
 - **Knows what was in front, and lets you change it.** The panel reads the title and process of the window you came from and shows it as a tile with the app's icon, then three starters for it: "Unstick me" for an error, "What does this output mean?" for a terminal, "Draft a reply" for mail. Press the tile to pick **Whole desktop** or any open window; the starters and Screenshot follow it. A window half off the screen or on another monitor captures whole. No pixels, no model call, until you press a starter or Screenshot.
@@ -35,6 +42,7 @@ It's experimental and built around how I work. Anthropic models can burn paid Cl
 - **Build as you draw.** Open the studio, share your design window, turn on Live build, and Sidelook sends a snapshot after you pause and updates the prototype. Anthropic models stream HTML into a live draft; OpenAI models hand over finished messages.
 - **Keep your versions.** Up to 12 stay in Sidelook's desktop profile. Restore one, read the source, download the HTML, import an old one.
 - **Work inside Windows apps.** Computer mode lives in the panel. It reads the accessible controls of one window, proposes one action, and waits for your yes. [Computer mode guide](docs/COMPUTER.md).
+- **Give it a business outcome, not a window.** Agent mode is its own screen: type a goal like "refund the last payment and email confirmation," and Sidelook reads Slack, resolves the Stripe customer and payment, and works the refund, the CRM update and the confirmation email in order. DashClaw decides allow, hold for you, or block before any write runs, and a second provider read confirms it after.
 
 ## Getting started
 
@@ -57,11 +65,33 @@ The companion needs the Microsoft Edge WebView2 Runtime. Sidelook checks on laun
 
 1. Settings, **Computer mode**. Allow local inspection for ten minutes and the screen takes over the panel: the window, the task, the one action waiting for you. **Back** returns to the conversation with control still on; **Open** on the line under the box brings the screen back.
 2. Open an app or pick an open window. **Read it** reads its controls locally.
-3. Type the task and press **Plan next action**. The line under it names the window whose fresh reading goes with the task, and **What goes** shows the body. Model and effort come from Settings.
-4. Check the consequence, the window and the target; references and the full tree sit behind **Details**. **Approve** does one thing, then Sidelook reads the same window back once, locally, and shows what it observed next to what Windows accepted. If the window closed or could not be read, it says verification was unavailable. **Reject** does nothing. Plan again when you want the next step.
+3. Type the task and press **Plan next action**. The line under it names the window whose fresh reading goes with the task, and **What goes** shows the body. With no window chosen, nothing is read and the model can only propose opening Notepad, Calculator or Paint. Model and effort come from Settings.
+4. Check the consequence, the window and the target; references and the full tree sit behind **Details**. **Approve** does one thing, then Sidelook reads the same window back once, locally, and shows what it observed next to what Windows accepted. If the window closed or could not be read, it says verification was unavailable. Then it plans the next step, so the next proposal is waiting for your Approve. **Reject** does nothing and ends the loop; Plan next action starts it again.
 5. **Stop control** in the footer, or hit **Ctrl+Shift+F12** from anywhere. Stop doesn't undo what already ran.
 
 A click or a key in the target app can send, delete, or buy something. Read every approval. Filters on names and commands are a safety net, not a promise that the app is trustworthy. Up to 20 model steps per session, each on your subscription or credits. [Capabilities, limits and protocol](docs/COMPUTER.md).
+
+## Agent mode
+
+Agent mode gives Sidelook one business outcome instead of one window, and works it across four apps: Slack for the
+request, Stripe and HubSpot for the writes, Gmail for the reply. Every write is governed by DashClaw, which decides
+allow, hold for a person, or block before anything runs, and a second read from the app itself confirms what
+actually happened after.
+
+1. Settings, **Agent mode**. The screen shows five app dots (Slack, Stripe, HubSpot, Gmail, DashClaw) and a goal box.
+2. Type the outcome and press **Start**. Each step Sidelook takes lands as a row in the timeline: the Slack request
+   found, the Stripe customer and payment matched, the refund proposed.
+3. A refund, a CRM update or a sent email is a governed write. A held write renders the **DashClaw policy approval**
+   card (app, operation, customer, amount, the agent's reason, the source evidence, the policy reason, the risk
+   score, the action id) with **Approve** and **Reject**; the same decision can be made on the DashClaw dashboard
+   instead.
+4. Every write that runs is read back from the provider before it counts as done. The run ends with a **summary
+   block**: apps touched, tool calls, writes planned and verified, approvals, duplicate side effects, and anything
+   left unresolved.
+5. **Stop** in the footer, or **Ctrl+Shift+F12**, ends the run; a write already in flight finishes its own
+   verification, and nothing new starts.
+
+[Set it up](docs/HACKATHON_SETUP.md) · [Watch the two-minute demo](docs/HACKATHON_DEMO.md).
 
 ## Models and speed
 
@@ -99,6 +129,7 @@ Share the design window, not Sidelook, or you'll capture yourself. Animated wind
 | Computer mode | Window choice is local. **Plan next action** sends a fresh bounded accessibility tree, editable values, the task and recent actions; the line under the button says so. No screenshot, no audio. History is session-only. |
 | Saved work | Versions and reference images live in Sidelook's desktop profile on this machine. |
 | Sent this session | The ledger in **What goes** lists every send and every refusal. It resets when Sidelook reloads. |
+| Agent mode | The goal and each tool's observations go to the model through the same local session as every other surface. DashClaw sees the method, the URL and a redacted body excerpt for every governed write, never a header, a token or a cookie. Slack, Stripe, HubSpot and Gmail credentials stay in the server process and never reach the model. Runs save to Sidelook's own data folder on this machine, redacted the same way, one file per run. |
 
 The builder makes frontend pages. Computer mode, enabled separately, drives accessible Windows controls with per-action approval. It is not general desktop automation: no canvas, no Explorer, no address bars, no terminals, no admin prompts. No shell tool, no repo editing, no backend, no deploy. Read generated output before you use it somewhere else. [Security details and reporting](SECURITY.md).
 
@@ -113,7 +144,7 @@ npm ci
 npm start
 ```
 
-Open **http://127.0.0.1:4317**. Zero runtime dependencies. **Start Sidelook.cmd** works too once Node is installed. In a plain browser the studio opens first; add `?companion` to start in the panel.
+Open **http://127.0.0.1:4317**. One runtime dependency, the official DashClaw SDK, used only by Agent mode. **Start Sidelook.cmd** works too once Node is installed. In a plain browser the studio opens first; add `?companion` to start in the panel.
 
 ## Development and verification
 
@@ -131,6 +162,8 @@ node scripts/verify-live.mjs
 node scripts/verify-models.mjs
 node scripts/verify-desktop-content.mjs
 npm run verify:mark
+npm run eval:agent
+npm run verify:agent
 ```
 
 Browser checks need Chrome plus Playwright or a global `@playwright/cli`. They use synthetic generation and don't touch your allowance. Live-provider checks are separate and do. `npm run lint` also checks that every served asset exists, every local reference is served, and nothing in `public/*.css` is set below 12px. `npm run verify:mark` (Windows; compiles the mark and the profile migration). CI runs install, tests, lint and build on Windows and Linux.

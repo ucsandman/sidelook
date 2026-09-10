@@ -80,16 +80,17 @@ test('summary counts reads, writes and finds a duplicate when the same opKey exe
   appendEvent(run,{kind:'tool',status:'ok',label:'stripe.find_customer',app:'stripe'});
   appendEvent(run,{kind:'tool',status:'ok',label:'stripe.get_recent_payments',app:'stripe'});
   const dup=planEffect(run,{tool:'stripe.refund_payment',app:'stripe',opKey:'refund:pi_1'});
-  updateEffect(run,dup.effectId,{status:'verified',attempts:2,reconciliations:[]});
+  // Duplicates count executions the provider performed (receipts or present reconciliations), never attempts that were refused before they left.
+  updateEffect(run,dup.effectId,{status:'verified',attempts:2,executions:2,reconciliations:[]});
   const clean=planEffect(run,{tool:'hubspot.update_customer',app:'hubspot',opKey:'update:c1:status'});
-  updateEffect(run,clean.effectId,{status:'verified',attempts:1,reconciliations:[]});
+  updateEffect(run,clean.effectId,{status:'verified',attempts:1,executions:1,reconciliations:[]});
   const s=summary(run);
   assert.equal(s.reads,2);assert.equal(s.apps,2,'stripe (events+effect) and hubspot');
   assert.equal(s.writes.planned,2);assert.equal(s.writes.verified,2);
   assert.equal(s.duplicates,1,'the refund executed twice under one opKey is one duplicate');
   const reconciled=planEffect(run,{tool:'gmail.send_message',app:'gmail',opKey:'send:m1'});
-  updateEffect(run,reconciled.effectId,{status:'verified',attempts:2,reconciliations:[{at:new Date().toISOString(),finding:'absent',detail:'first attempt never sent'}]});
-  assert.equal(summary(run).duplicates,1,'an absent reconciliation explains the second attempt, so it is not counted again');
+  updateEffect(run,reconciled.effectId,{status:'verified',attempts:2,executions:1,reconciliations:[{at:new Date().toISOString(),finding:'absent',detail:'first attempt never sent',presend:true}]});
+  assert.equal(summary(run).duplicates,1,'a retry after a refused first attempt executed once, so it is not counted again');
 });
 
 test('finalStatus precedence covers all six terminals',()=>{
@@ -121,7 +122,7 @@ test('finalStatus precedence covers all six terminals',()=>{
 test('finish transitions to a terminal, freezes the summary and rejects a non-terminal status',()=>{
   const run=createRun({goal:'g'});run.status='verifying';
   finish(run,'completed','All done.');
-  assert.equal(run.status,'completed');assert.equal(run.finalMessage,'All done.');
+  assert.equal(run.status,'completed');assert.equal(run.closing,'All done.','finish carries the runtime closing line; the model words stay in finalMessage');assert.equal(run.finalMessage,'');
   assert.ok(run.summary);assert.equal(run.summary.status,'completed');
   assert.equal(run.currentStep,null);assert.equal(run.clarification,null);
   assert.equal(run.events.at(-1).kind,'summary');
