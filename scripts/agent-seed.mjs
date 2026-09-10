@@ -41,7 +41,14 @@ async function slackCall({config,fetchImpl,method,form,label}){
 async function seedStripe({config,providers,fetchImpl,email,log}){
   if(!config.stripe.configured){log(line('stripe','skipped: STRIPE_SECRET_KEY'));return;}
   if(config.stripe.mode==='live'){log(line('stripe','skipped: a live Stripe key is configured; seeding refuses to write to a live account'));return;}
-  let customer=(await providers.stripe.findCustomer({email}))[0];
+  const matches=await providers.stripe.findCustomer({email});
+  // The demo needs exactly one customer for the address, or the agent will (rightly) stop and ask which one. Extra copies of the
+  // demo customer, which a search-index lag once produced, are removed here; this only ever runs in test mode.
+  for(const extra of matches.slice(1)){
+    await request({url:`${STRIPE_BASE}/v1/customers/${encodeURIComponent(extra.id)}`,method:'DELETE',headers:stripeAuth(config),fetchImpl,label:'Stripe duplicate customer delete'});
+    log(line('stripe',`removed duplicate demo customer ${extra.id}`));
+  }
+  let customer=matches[0];
   let customerCreated=false;
   if(!customer){
     const form=new URLSearchParams({email,name:config.demo.customer,description:'Sidelook hackathon demo customer'});

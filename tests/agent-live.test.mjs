@@ -34,6 +34,8 @@ test('health: all five integrations are ready',async t=>{
 
 test('Stripe: a refund round trip through the real governed engine',async t=>{
   if(!ENABLED) return t.skip(SKIP_REASON);
+  if(!config.stripe.configured || config.stripe.mode!=='test') return t.skip('Stripe test mode is not configured (STRIPE_TEST_SECRET_KEY or a sk_test_ STRIPE_SECRET_KEY).');
+  if(!config.dashclaw.configured) return t.skip('DashClaw is not configured (DASHCLAW_BASE_URL, DASHCLAW_API_KEY, DASHCLAW_APPROVER_API_KEY).');
   const email='sidelook-live-test@sidelook.local';
   let customer=(await providers.stripe.findCustomer({email}))[0];
   if(!customer){
@@ -80,6 +82,7 @@ test('Stripe: a refund round trip through the real governed engine',async t=>{
 
 test('HubSpot: a property round trip on the seeded contact',async t=>{
   if(!ENABLED) return t.skip(SKIP_REASON);
+  if(!config.hubspot.configured) return t.skip('HubSpot is not configured (HUBSPOT_ACCESS_TOKEN); this live round trip needs it.');
   const contact=(await providers.hubspot.findContact({domain:config.demo.domain}))[0];
   assert.ok(contact,`No HubSpot contact found for @${config.demo.domain}. Run npm run agent:seed first.`);
   const property=config.hubspot.property;
@@ -97,6 +100,7 @@ test('HubSpot: a property round trip on the seeded contact',async t=>{
 
 test('Gmail: sends a one-line test message to itself and finds it by Message-ID',async t=>{
   if(!ENABLED) return t.skip(SKIP_REASON);
+  if(!config.gmail.configured) return t.skip('Gmail is not configured (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_FROM); this live round trip needs it.');
   const messageId=`<sidelook-live-test-${Date.now()}@sidelook.local>`;
   const raw=providers.gmail.composeRaw({to:config.gmail.from,subject:'Sidelook live test',body:'This is a one-line test message from the Sidelook live test suite.',messageId});
   const sent=await providers.gmail.send({raw});

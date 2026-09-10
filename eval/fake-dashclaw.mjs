@@ -51,7 +51,12 @@ function verifyNonFabrication(content,sourceOfTruth){
   const violations=[];
   const allowed=sourceOfTruth.allowedFacts.map(f=>String(f.value));
   for(const fact of sourceOfTruth.requiredFacts || []) if(!content.includes(String(fact.value))) violations.push({code:'MISSING_REQUIRED_FACT',label:fact.label,detail:`"${fact.value}" was required but not found.`});
-  for(const pattern of sourceOfTruth.forbiddenPatterns || []) if(new RegExp(pattern,'i').test(content)) violations.push({code:'FORBIDDEN_PATTERN',label:pattern,detail:'A forbidden phrase was found.'});
+  // The real verifier takes {pattern, label, flags?} objects and fails closed (engine_error) on anything else.
+  for(const entry of sourceOfTruth.forbiddenPatterns || []){
+    const src=entry && typeof entry==='object'?entry.pattern:null;
+    if(typeof src!=='string'){violations.push({code:'engine_error',label:'engine',detail:'non_fabrication: unsafe or oversized pattern'});continue;}
+    if(new RegExp(src,entry.flags || 'i').test(content)) violations.push({code:'forbidden_match',label:entry.label || src,detail:'A forbidden phrase was found.'});
+  }
   const extract=sourceOfTruth.extract || {};
   if(extract.money) for(const token of extractMoney(content)) if(!allowed.some(a=>moneyValue(a)===moneyValue(token))) violations.push({code:'UNVERIFIED_MONEY',label:'money',detail:`${token} does not match a verified amount.`});
   if(extract.dates) for(const token of extractDates(content)){const iso=normalizeDate(token);if(!iso || !allowed.some(a=>normalizeDate(a)===iso)) violations.push({code:'UNVERIFIED_DATE',label:'date',detail:`${token} does not match a verified date.`});}
