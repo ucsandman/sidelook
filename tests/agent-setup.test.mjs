@@ -35,7 +35,8 @@ async function withCapturedConsole(run){
 
 test('installs only the policies missing by name; bodies carry rules and agent_ids as JSON strings',async()=>{
   const existingNames=[SIDELOOK_POLICIES[0].name,SIDELOOK_POLICIES[2].name];
-  const existing=existingNames.map((name,i)=>({id:`gp_existing_${i}`,name}));
+  // A present row carries the rules the server stored; the installer compares its verdict fields against what it would send.
+  const existing=existingNames.map((name,i)=>{const policy=SIDELOOK_POLICIES.find(p=>p.name===name);return {id:`gp_existing_${i}`,name,policy_type:policy.policy_type,rules:JSON.stringify(policy.rules)};});
   const {fetchImpl,calls}=fakeFetch({existing});
   let result;
   await withCapturedConsole(async()=>{result=await installDashclawPolicies({baseUrl:'http://dashclaw.test',approverKey:'oc_live_faketestkey0000000000000',agentId:'sidelook-agent',fetchImpl});});

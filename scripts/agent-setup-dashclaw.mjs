@@ -6,14 +6,25 @@ import {pathToFileURL} from 'node:url';
 const HEADER='x-api-key';
 
 // The six rows, exact names/types/rules from the contract. agent_ids scopes every row to one agent so it never touches another.
+// short_list: true is what keeps a row interrupting: without it DashClaw's Short List admission demotes the verdict to warn
+// (measured 2026-09-10 on a live org: four rows created without the flag came back as action warn). The org has ten slots.
 export const SIDELOOK_POLICIES=[
-  {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval'}},
-  {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval'}},
-  {name:'sidelook-agent: block over the ceiling',policy_type:'risk_threshold',rules:{threshold:100,action:'block'}},
-  {name:'sidelook-agent: no fabricated email',policy_type:'non_fabrication',rules:{action_types:['email'],on_violation:'block'}},
-  {name:'sidelook-agent: only api and email',policy_type:'role_constraint',rules:{allowed_action_types:['api','email'],escalate_action:'block'}},
-  {name:'sidelook-agent: writes carry evidence',policy_type:'require_evidence',rules:{action_types:['api','email'],enforcement:'block'}}
+  {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval',short_list:true}},
+  {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval',short_list:true}},
+  {name:'sidelook-agent: block over the ceiling',policy_type:'risk_threshold',rules:{threshold:100,action:'block',short_list:true}},
+  {name:'sidelook-agent: no fabricated email',policy_type:'non_fabrication',rules:{action_types:['email'],on_violation:'block',short_list:true}},
+  {name:'sidelook-agent: only api and email',policy_type:'role_constraint',rules:{allowed_action_types:['api','email'],escalate_action:'block',short_list:true}},
+  {name:'sidelook-agent: writes carry evidence',policy_type:'require_evidence',rules:{action_types:['api','email'],enforcement:'block',short_list:true}}
 ];
+
+// The verdict fields the server may rewrite on admission. A stored row whose verdict differs from the one sent is not installed.
+const VERDICT_FIELDS=['action','on_violation','escalate_action','enforcement'];
+export function verdictDrift(policy,row){
+  let stored;try{stored=typeof row?.rules==='string'?JSON.parse(row.rules):(row?.rules || {});}catch{return 'stored rules are not JSON';}
+  if(row?.policy_type && row.policy_type!==policy.policy_type) return `stored as ${row.policy_type}`;
+  for(const field of VERDICT_FIELDS) if(policy.rules[field]!==undefined && stored[field]!==policy.rules[field]) return `${field} stored as ${stored[field] ?? '(none)'}, sent ${policy.rules[field]}`;
+  return null;
+}
 
 export class DashClawSetupError extends Error {
   constructor(code,message){super(message);this.code=code;}
@@ -57,7 +68,10 @@ async function createOne(policy,{baseUrl,approverKey,agentId,fetchImpl,dryRun}){
     return {name:policy.name,type:policy.policy_type,status:'present'};
   }
   if(!response.ok) return {name:policy.name,type:policy.policy_type,status:`failed: ${response.status} ${await safeText(response)}`};
-  return {name:policy.name,type:policy.policy_type,status:'created'};
+  // The server may have admitted the row with a softer verdict; the stored row, not the 201, says what was installed.
+  const created=await safeJson(response);
+  const drift=created?.policy?verdictDrift(policy,created.policy):null;
+  return {name:policy.name,type:policy.policy_type,status:drift?`failed: created but ${drift}`:'created'};
 }
 
 async function removeOne(policy,existingByName,{baseUrl,approverKey,fetchImpl,dryRun}){
@@ -103,7 +117,8 @@ export async function installDashclawPolicies({baseUrl,approverKey,agentId='side
   for(const policy of SIDELOOK_POLICIES){
     if(remove){rows.push(await removeOne(policy,existingByName,{baseUrl,approverKey,fetchImpl,dryRun}));continue;}
     const found=existingByName.get(policy.name);
-    rows.push(found?{name:policy.name,type:policy.policy_type,status:'present'}:await createOne(policy,{baseUrl,approverKey,agentId,fetchImpl,dryRun}));
+    if(found){const drift=verdictDrift(policy,found);rows.push({name:policy.name,type:policy.policy_type,status:drift?`failed: present but ${drift} (run --remove, then install again)`:'present'});continue;}
+    rows.push(await createOne(policy,{baseUrl,approverKey,agentId,fetchImpl,dryRun}));
   }
   printTable(rows);
   const ok=rows.every(r=>!r.status.startsWith('failed'));

@@ -388,6 +388,8 @@ Visual identity: DESIGN.md tokens, 12px floor, no cards beyond the approval card
 | `sidelook-agent: only api and email` | `role_constraint` | `allowed_action_types: ['api','email']`, `escalate_action: 'block'` | any other declared action type is blocked |
 | `sidelook-agent: writes carry evidence` | `require_evidence` | `action_types: ['api','email']`, `enforcement: 'block'` | a declaration without an `act` is blocked |
 
+Every row carries `short_list: true`. Measured 2026-09-10 on the live org: rows created without it were admitted at `warn` (DashClaw's Short List admission demotes any interrupting verdict that does not opt in), and the org has ten interrupting slots. The installer reads each row back and reports `created but action stored as warn` rather than `created` when the server softened it. The first four rows are the ones the demos depend on; the last two (`role_constraint`, `require_evidence`) are defence in depth for what the runtime already enforces (only `api`/`email` are ever declared; every write carries an act) and need two free Short List slots. On Wes's org on 2026-09-10 the first four installed and the last two hit `SHORT_LIST_FULL (10 of 10)`.
+
 Reads never reach DashClaw (they are recorded in the Sidelook trace only). Ambiguous identity and missing source evidence are refused by the runtime precondition before any DashClaw call and, if they ever reached it, carry `confidence: 0` and `risk_score: 100`. The live-instance check on 2026-09-10 found no active org-wide policy on Wes's instance that would hold `api`/`email` declared types, and the agent-scoped rows above do not affect other agents.
 
 ## 16. Evaluation harness (`eval/`, `npm run eval:agent`)
@@ -430,3 +432,4 @@ DEMO READY: real credentials configured, `npm run agent:health` green for all fi
 ## 20. Revision log
 
 - 2026-09-10: initial contract.
+- 2026-09-10: policy rows carry `short_list: true`; the installer verifies the stored verdict; `governed.check` and `record` read the real GuardResult shape (`decision` is a string, `non_fabrication` rides inside it); `STRIPE_TEST_SECRET_KEY` wins over `STRIPE_SECRET_KEY`; Slack adapter methods return `{messages}` / `{replies}`; the `verifying` state returns to `executing` after each write.
