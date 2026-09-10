@@ -30,9 +30,12 @@ goes out.
 - **HubSpot.** Idempotent by nature: setting a property to the same value twice reads the same either way. The
   `precheck` step reads the property before writing; if it already matches, the effect is recorded `verified` with
   `attempts:0` and no write is sent at all.
-- **Gmail.** A deterministic Message-ID, `<sidelook-<runId>-<n>@sidelook.local>`, minted once by
-  `gmail.prepare_message` and reused for every resend. Verification and reconciliation both search Gmail by that
-  exact Message-ID, never by content.
+- **Gmail.** A deterministic Message-ID, `<sidelook-<runId>-<n>@sidelook.local>`, minted by
+  `gmail.prepare_message`. Verification and reconciliation both search Gmail by that exact Message-ID, never by
+  content. Gmail offers no idempotency key and its search index lags a send, so a send whose answer was lost is never
+  resent on the strength of an absent read: it stays `uncertain` and is read again (three reads, 3 s apart) at the
+  end of the run. The send's logical identity is `send:<recipient>:<refund id>`, so a second prepare in the same run
+  cannot produce a second confirmation to the same person.
 - **DashClaw.** `createAction`'s own `idempotency_key` is the same value. A replayed call returns
   `idempotent_replay:true` with the existing action row; `governed.mjs` maps that row's actual status
   (`pending_approval` / `running` with a claim / anything terminal) rather than assuming a replay is safe to treat
@@ -45,9 +48,15 @@ goes out.
 - **present.** The provider already holds the write (a Stripe refund matched by `metadata.sidelook_effect`, a
   HubSpot property equal to the target value, a Gmail message under Sent by Message-ID). Treated as executed and
   carried straight into the normal verify step; nothing is resent.
-- **absent.** The provider holds no trace. Safe to retry with the same idempotency key or Message-ID, bounded to 3
-  attempts total with 1s/3s backoff.
+- **absent.** The provider holds no trace. For Stripe (idempotency key) and HubSpot (a property set to a value) this
+  is safe to retry, bounded to 3 attempts total with 1s/3s backoff. For Gmail an absent search read is treated as
+  unknown, because the index lags: the effect stays `uncertain` instead of risking a second email.
 - **unknown.** The read itself failed. The effect stays `uncertain`; nothing is retried blind.
+
+A 429 or a 409 from a write is treated like a timeout (`sentRequest: true`): the provider is read before any retry,
+since a rate limit can answer after a write was queued and Stripe's 409 means the same request is still running. A
+request that provably never left (connection refused, an injected pre-send failure) is retried without a read and
+recorded with a `presend` reconciliation entry.
 
 The same function runs both before any retry and inside the recovery sweep. The sweep additionally re-reads every
 earlier `verified`/`executed` effect in the run (one read each, not a write) so the timeline itself proves an
@@ -81,9 +90,12 @@ A write whose request may have left the process (a timeout or a connection reset
 never retried blind. The effect goes `uncertain` and `reconcile()` runs immediately; if that read itself fails, the
 effect stays `uncertain` for the rest of the run. `lib/agent/loop.mjs` runs one more pass
 (`reconcileUncertain`) after the model loop ends for anything still `uncertain`. `finalStatus()` in
-`lib/agent/run.mjs` puts an uncertain effect ahead of everything except a user Stop: cancelled, uncertain, runtime
-failure, blocked-with-nothing-verified, partial, completed, in that order. A run with every other write verified
-can still end `uncertain` because of one write nobody could confirm either way.
+`lib/agent/run.mjs` puts an unsettled effect ahead of everything, a user Stop included: uncertain (or claimed or
+executing), cancelled, runtime failure, blocked-with-nothing-verified, partial, completed, in that order. A Stop
+stops new work, not finding out what already happened: the final reconciliation still runs on its own 30 s signal.
+A run with every other write verified can still end `uncertain` because of one write nobody could confirm either
+way. The same reads happen on restart: a run interrupted mid-write is reconciled against the providers before it is
+stamped, and a write that had reached DashClaw is treated as uncertain until a read says otherwise.
 
 ## The prompt-injection boundary
 
@@ -228,3 +240,10 @@ Not yet exercised live: Slack, HubSpot and Gmail (no credentials on this machine
 | A | | | | | |
 | B | | | | | |
 | C | | | | | |
+
+## Known limits
+
+- A provider read does not observe Stop mid-request: the run's abort signal reaches the model turn and every wait, but not the adapters' HTTP calls, so Stop can take up to one provider timeout (15 s) plus a read retry to land while a Slack scan or a Stripe search is in flight. Writes deliberately finish and verify after Stop.
+- Gmail has no provider-side idempotency and its search index lags a send, so a send whose answer was lost stays `uncertain` (three delayed reads, never a resend) rather than being retried. Stripe (idempotency key plus refund metadata) and HubSpot (a property set to a value) are retried only after a read finds the write absent.
+- Two of the six DashClaw rows (`only api and email`, `writes carry evidence`) need free Short List slots on the org; the runtime enforces both rules itself, so the demos do not depend on them.
+- Restart reconciliation reads the providers once per uncertain write with a 30 s budget; a provider that is down at restart leaves the run `uncertain` with the reason in its errors.
