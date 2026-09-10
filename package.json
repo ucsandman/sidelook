@@ -27,5 +27,8 @@
     "verify:states": "node scripts/verify-states.mjs",
     "verify:mark": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-mark.ps1"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "dashclaw": "5.33.9"
+  }
 }

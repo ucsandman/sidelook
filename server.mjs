@@ -9,6 +9,7 @@ import { runProcess, subscriptionLogin, installCodex, SubscriptionError } from '
 import { MODELS, selection, SelectionError, choice } from './lib/models.mjs';
 import { localModels } from './lib/local.mjs';
 import { Computer } from './lib/computer.mjs';
+import { createAgentRuntime } from './lib/agent/index.mjs';
 
 export const PREVIEW_CSP = "sandbox allow-scripts allow-forms; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
 export const DRAFT_CSP = "sandbox; default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
@@ -40,13 +41,31 @@ async function readJson(req) {
   } catch { throw new AppError('The request is not valid JSON.'); }
 }
 
-export function createApp({ vision = new Vision(), assistant = new Assistant({vision}), computer, maxCalls = 60, login = subscriptionLogin, install = installCodex, local = localModels, instanceId, desktopKey } = {}) {
+export function createApp({ vision = new Vision(), assistant = new Assistant({vision}), computer, agent, maxCalls = 60, login = subscriptionLogin, install = installCodex, local = localModels, instanceId, desktopKey } = {}) {
   computer ||= new Computer({launcherInstance:instanceId});
   if (desktopKey !== undefined && !/^[a-f0-9]{64}$/.test(desktopKey)) throw new Error('Invalid desktop launch key.');
   const matchesKey = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) && timingSafeEqual(Buffer.from(value),Buffer.from(desktopKey));
   const token = randomBytes(32).toString('hex');
   const previews = new Map();
   let busy = false; let calls = 0; let draftSession=null; let dictating = false;
+  // One model turn of Agent mode is one subscription request, under the same single-flight flag and allowance as every other send.
+  // The loop waits its turn (up to a minute) instead of failing when a chat or a build holds the flag.
+  const agentInference = async (request,signal) => {
+    const until = Date.now()+60000;
+    while (busy) {
+      if (signal?.aborted) throw new DOMException('Canceled','AbortError');
+      if (Date.now() > until) throw new AppError('Another model request is still running.',409,'BUSY');
+      await new Promise(resolve => setTimeout(resolve,250));
+    }
+    if (calls >= maxCalls) throw new AppError('Your local Sidelook request allowance is used up. Choose Start new allowance in Setup.',429,'SESSION_LIMIT');
+    busy = true; calls++;
+    try {
+      const timeout = AbortSignal.timeout(isLocalSelection(request) ? 300000 : 180000);
+      return await vision.generate(request.system,[{ text:request.prompt }],request.schema,signal ? AbortSignal.any([signal,timeout]) : timeout,{ model:request.model,effort:request.effort });
+    } finally { busy = false; }
+  };
+  const agentReady = agent ? Promise.resolve(agent) : createAgentRuntime({ inference:agentInference });
+  agentReady.catch(() => {});
   const server = http.createServer(async (req,res) => {
     const port = server.address().port;
     const hosts = [`127.0.0.1:${port}`,`localhost:${port}`];
@@ -93,9 +112,52 @@ export function createApp({ vision = new Vision(), assistant = new Assistant({vi
         const data = await readFile(new URL(`./public/${name}`,import.meta.url));
         res.writeHead(200,{'Content-Type':`${type}; charset=utf-8`}); return res.end(data);
       }
-      if (req.method !== 'POST' || !['/api/chat','/api/computer','/api/observe','/api/build','/api/preview','/api/dictate','/api/login','/api/install-codex','/api/reset-budget'].includes(url.pathname)) throw new AppError('Not found.',404);
+      if (req.method !== 'POST' || !['/api/chat','/api/computer','/api/agent','/api/observe','/api/build','/api/preview','/api/dictate','/api/login','/api/install-codex','/api/reset-budget'].includes(url.pathname)) throw new AppError('Not found.',404);
       if (req.headers['x-sidelook-session'] !== token) throw new AppError('Reload Sidelook to reconnect your local session.',403);
       const data = await readJson(req);
+      if (url.pathname === '/api/agent') {
+        // Agent mode: the runtime owns every run; this route only relays operations and streams snapshots. Contract: docs/AGENT_MODE_IMPLEMENTATION.md §11.
+        const runtime = await agentReady;
+        const runId = typeof data.run === 'string' ? data.run.slice(0,64) : '';
+        const op = data.op;
+        if (op === 'health') return send(200,await runtime.health());
+        if (op === 'list') return send(200,{ runs:await runtime.list() });
+        if (op === 'get') return send(200,{ run:await runtime.get(runId) });
+        if (op === 'create') {
+          if (data.consent !== true) throw new AppError('Press Start to send this goal to your model and let the agent work.',403);
+          const selected = selection(data);
+          const goal = typeof data.goal === 'string' ? data.goal : '';
+          if (!goal.trim() || goal.length > 2000) throw new AppError('Say what the agent should accomplish, under 2,000 characters.');
+          if (calls >= maxCalls) throw new AppError('Your local Sidelook request allowance is used up. Choose Start new allowance in Setup.',429,'SESSION_LIMIT');
+          const run = await runtime.create({ goal,...selected,windowTitle:typeof data.windowTitle === 'string' ? data.windowTitle : '' });
+          return send(200,{ run,remaining:maxCalls-calls });
+        }
+        if (op === 'watch') {
+          if (req.headers.accept !== 'application/x-ndjson') throw new AppError('Watch needs an ndjson stream.',406);
+          let pending = null, timer = null, last = null, closed = false;
+          const write = value => { if (closed || res.destroyed) return; if (!res.headersSent) res.writeHead(200,{ 'Content-Type':'application/x-ndjson; charset=utf-8','X-Accel-Buffering':'no' }); if (res.writableLength < 4_000_000) res.write(JSON.stringify(value)+'\n'); };
+          const flush = () => { timer = null; if (!pending) return; const view = pending; pending = null; write({ type:'run',run:view }); if (['completed','partial','blocked','cancelled','failed','uncertain'].includes(view.status)) end(); };
+          const end = () => { if (closed) return; closed = true; clearInterval(heartbeat); clearTimeout(timer); unsubscribe?.(); if (!res.destroyed) res.end(); };
+          const heartbeat = setInterval(() => write({ type:'heartbeat',at:new Date().toISOString() }),10000);
+          const unsubscribe = runtime.watch(runId,view => { pending = view; last = view; if (!timer) timer = setTimeout(flush,150); });
+          if (!unsubscribe) { clearInterval(heartbeat); return send(200,{ type:'run',run:await runtime.get(runId) }); }
+          res.once('close',end);
+          if (last && ['completed','partial','blocked','cancelled','failed','uncertain'].includes(last.status)) { clearTimeout(timer); timer = null; pending = null; write({ type:'run',run:last }); end(); }
+          return;
+        }
+        if (op === 'answer') {
+          if (data.consent !== true) throw new AppError('Press Answer to send this to your model.',403);
+          return send(200,{ run:await runtime.answer(runId,data.message) });
+        }
+        if (op === 'approve' || op === 'reject') {
+          if (data.consent !== true) throw new AppError(op === 'approve' ? 'Press Approve to submit this decision to DashClaw.' : 'Press Reject to submit this decision to DashClaw.',403);
+          const actionId = typeof data.actionId === 'string' ? data.actionId.slice(0,128) : '';
+          if (!actionId) throw new AppError('The approval is missing its action id. Refresh and look again.');
+          return send(200,await runtime[op](runId,actionId,typeof data.reason === 'string' ? data.reason : ''));
+        }
+        if (op === 'cancel') return send(200,{ run:await runtime.cancel(runId) });
+        throw new AppError('Unsupported agent operation.');
+      }
       if(url.pathname==='/api/computer') {
         if(data.op==='propose' && (busy || calls>=maxCalls)) throw new AppError(busy?'Another model request is running.':'Your local request allowance is used up. Reset it in Setup.',409);
         const controller=new AbortController();const abort=()=>{controller.abort();if(data.op!=='status' && data.op!=='read')computer.stop();};
@@ -193,7 +255,7 @@ export function createApp({ vision = new Vision(), assistant = new Assistant({vi
   });
   server.requestTimeout = 320000;
   server.headersTimeout = 10000;
-  server.on('close',()=>computer.stop());
+  server.on('close',()=>{computer.stop();agentReady.then(runtime=>runtime.stopAll()).catch(()=>{});});
   return server;
 }
 

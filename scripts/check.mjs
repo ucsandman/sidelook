@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { readdir, readFile, access } from 'node:fs/promises';
 import { assets } from '../server.mjs';
 const files = ['server.mjs'];
-for (const dir of ['lib','public','site','scripts','tests']) {
-  for (const file of await readdir(dir)) if (/\.(mjs|js)$/.test(file)) files.push(`${dir}/${file}`);
+// lib/agent and eval nest one level (providers); every JavaScript file under them is checked like the rest.
+const listJs = async dir => (await readdir(dir,{ withFileTypes:true,recursive:true })).filter(entry => entry.isFile() && /\.(mjs|js)$/.test(entry.name)).map(entry => `${entry.parentPath.replaceAll('\\','/')}/${entry.name}`);
+for (const dir of ['lib','public','site','scripts','tests','eval']) {
+  files.push(...await listJs(dir).catch(() => []));
 }
 for (const file of files) execFileSync(process.execPath,['--check',file],{ stdio:'pipe' });
 
@@ -33,7 +35,7 @@ for (const file of sources.filter(f => f.endsWith('.css'))) {
 
 // The clipboard is write-only. A read would make "screen & mic off" untrue, so none may exist in the page or the shell.
 let clipboardReads = 0, clipboardFiles = 0;
-const shipped = ['server.mjs', ...sources.map(f => `public/${f}`), ...(await readdir('lib')).map(f => `lib/${f}`), ...(await readdir('desktop')).filter(f => /\.cs$/.test(f)).map(f => `desktop/${f}`), ...(await readdir('scripts')).filter(f => /\.(cs|ps1|cmd)$/.test(f)).map(f => `scripts/${f}`)];
+const shipped = ['server.mjs', ...sources.map(f => `public/${f}`), ...await listJs('lib'), ...(await readdir('desktop')).filter(f => /\.cs$/.test(f)).map(f => `desktop/${f}`), ...(await readdir('scripts')).filter(f => /\.(cs|ps1|cmd)$/.test(f)).map(f => `scripts/${f}`)];
 for (const file of shipped) {
   clipboardFiles++;
   const text = await readFile(file,'utf8');
