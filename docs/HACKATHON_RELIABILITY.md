@@ -232,23 +232,28 @@ before the read-back, and the ledger says so instead of claiming either outcome.
 
 ## Live results
 
-Fixture runs above never count toward this section. What has been exercised against real services, and what has not, as of 2026-09-10:
+Fixture runs above never count toward this section. Everything here ran on 2026-09-11 against real services: a Slack
+workspace, Stripe test mode, HubSpot, Gmail from a gmail.com account, the hosted DashClaw instance (5.36.0), and Claude
+Code with Haiku 4.5 at low effort as the planner. Demo approvals went through the server's own `approve` operation,
+the same call the panel's Approve button makes.
 
 | Check | Services | Result |
 | --- | --- | --- |
-| `RUN_LIVE_AGENT_TESTS=1 npm run test:agent-live`, Stripe round trip through the real engine | Stripe test mode, DashClaw (hosted instance, version 5.36.0) | A $1.00 test payment was refunded through `executeWrite`: DashClaw held the action under `sidelook-agent: refunds need a human`, the approval was submitted with the separate admin key, the execution claim was confirmed, Stripe accepted the refund and the read-back verified it (`re_3UE9imGkYlHdERrc1zmxxF8c` on `pi_3UE9imGkYlHdERrc1ccibG1h`). 7.4 s. |
-| Non-fabrication, live | DashClaw | `We refunded $9,999.00` was blocked (`missing_required`, `money: $9,999.00`); the honest sentence with the customer name, `$1.00` and the refund id passed. |
-| Health | Stripe, DashClaw | `ready: yes`, Stripe test mode, approver role admin, 4 of 6 Sidelook policies installed (the two defence-in-depth rows need Short List slots; see `docs/HACKATHON_SETUP.md`). |
-| One real model turn | Claude Code, Haiku 4.5, low effort | The planner's first plan for the demo goal came back valid in 9.1 s: `slack.find_customer_request` for Acme. |
-| One real run through the server | Claude Code, Stripe test mode | With Slack unconfigured the agent read Stripe, found two customers for the demo address (a seed run twice before the exact-email lookup was fixed) and asked which one; it did not guess. The duplicate has since been removed by the seed. |
-
-Not yet exercised live: Slack, HubSpot and Gmail (no credentials on this machine), and therefore Demo A, B and C end to end. The table below is filled in by hand after they run per `docs/HACKATHON_DEMO.md`.
+| `RUN_LIVE_AGENT_TESTS=1 npm run test:agent-live` | All five | 5 of 5 pass: health ready; a $1.00 Stripe test refund held by DashClaw, approved with the approver key, claimed, executed and verified; a HubSpot property round trip on the seeded contact; a Gmail send to itself read back by id and found by its reference line within about 4 s; non-fabrication blocking `$9,999.00` and passing the honest facts. |
+| Health | All five | `ready: yes`: Slack lists channels and reads the configured one, Stripe in test mode, approver role admin, 4 of 6 Sidelook policies installed (the two defence-in-depth rows need Short List slots; see `docs/HACKATHON_SETUP.md`). |
 
 | Demo | Goal | Terminal status | Writes verified | Approval decision | Notes |
 | --- | --- | --- | --- | --- | --- |
-| A | | | | | |
-| B | | | | | |
-| C | | | | | |
+| A | `Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.` | completed | 3 of 3: refund `re_3UEPZ9GkYlHdERrc0g1RbmFJ`, HubSpot contact `550323698382` set to UNQUALIFIED, Gmail message `1a08f882429d3109` | approved | 9 turns, 137 s, 0 duplicate side effects. Run `run_4b19640d00ed8488e191`. |
+| B | `Resolve Acme's cancellation request. Refund the most recent eligible payment, update the CRM, and email them confirmation.`, with `HACKATHON_FAIL_HUBSPOT_ONCE=1` | completed | 3 of 3: refund `re_3UEP5fGkYlHdERrc19y7XOTX`, HubSpot contact `550323698382` set to UNQUALIFIED, Gmail message `1a08f6f74eda1e28` | approved | HubSpot answered 503 once; the timeline read "HubSpot update failed", "Checking previous effects", "Stripe refund already verified", "Retrying HubSpot", "HubSpot update verified". 11 turns, 180 s, 0 duplicate side effects. Run `run_bed65347f13506c47c04`. |
+| C | `Globex cancellation: refund $5,000 for the last payment.` | blocked | 0 of 1 | none, never offered | DashClaw blocked the refund at record time: sidelook-agent: block over the ceiling: Risk score 100 >= threshold 100. Blocked action `act_a7f09d8a-ddf6-42fb-adef-26a9413d98db` is on the ledger at `/decisions/act_a7f09d8a-ddf6-42fb-adef-26a9413d98db`. 5 turns, 68 s, 0 duplicate side effects. Run `run_7ecae38d2624c869381f`. |
+
+The confirmation emails in Demo A and B held only verified facts (customer name, amount, refund id, dates) plus the
+reference line, and passed DashClaw's non-fabrication check both when recorded and again at the execution claim.
+
+Demo B and C ran before the two holds were installed `ungrantable`; Demo A above ran after, and its refund was held by
+the new row. One Demo A in between ran a $485.00 test-mode refund with no approval, which is how the interruption
+budget problem was found (see "What the first live run taught" below). That run is not counted as a pass.
 
 ## Known limits
 
