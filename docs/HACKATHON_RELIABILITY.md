@@ -251,6 +251,10 @@ the same call the panel's Approve button makes.
 The confirmation emails in Demo A and B held only verified facts (customer name, amount, refund id, dates) plus the
 reference line, and passed DashClaw's non-fabrication check both when recorded and again at the execution claim.
 
+The panel itself was then used by a person on 2026-09-11: Demo A started with Start and approved with the card's
+Approve button, Haiku 4.5 at low effort, completed with 3 of 3 writes verified, 0 duplicates and 0 unresolved in 174 s
+(run `run_7b3fd67c76bab7c8a3ad`, refund `re_3UEPbnGkYlHdERrc0JJg08AU`, DashClaw action approved by the operator).
+
 Demo B and C ran before the two holds were installed `ungrantable`; Demo A above ran after, and its refund was held by
 the new row. One Demo A in between ran a $485.00 test-mode refund with no approval, which is how the interruption
 budget problem was found (see "What the first live run taught" below). That run is not counted as a pass.
