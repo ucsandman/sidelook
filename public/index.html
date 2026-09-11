@@ -68,15 +68,13 @@
             <div class="frame-tools frame-attach" id="frame-attach" hidden><button class="small-button attach-button" id="use-frame">Use this frame</button></div>
             <div class="scan-line" aria-hidden="true"></div>
           </div>
-          <p class="source-status" id="source-status">Camera off</p>
+          <div class="source-line"><p class="source-status" id="source-status">Camera off</p><button class="quiet live-toggle" id="live-start">Live build</button><button class="quiet live-toggle" id="live-pause" hidden>Live <span id="live-count">0 / 10 builds</span> · Pause</button></div>
           <div class="source-controls">
             <button class="quiet" id="share-screen"><svg><use href="#i-screen"/></svg> Share window</button>
             <button class="quiet" id="connect" aria-label="Connect camera"><svg><use href="#i-camera"/></svg> Camera</button>
             <button class="quiet" id="upload"><svg><use href="#i-upload"/></svg> Upload</button>
             <button class="quiet" id="example" aria-label="Try a sample sketch">Sample sketch</button>
             <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
-            <button class="quiet live-toggle" id="live-start">Live build</button>
-            <button class="quiet live-toggle" id="live-pause" hidden>Live <span id="live-count">0 / 10 builds</span> · Pause</button>
           </div>
           <div class="camera-controls" id="camera-controls" hidden><label for="camera-select">Camera</label><select id="camera-select" aria-label="Choose camera"></select><button class="quiet" id="camera-off">Turn off</button></div>
           <section class="live-controls" id="live-controls" aria-label="Live build" hidden>

@@ -12,6 +12,8 @@ body:not([data-native]) .companion-edges{display:none}
 
 /* Header: the mark (the drag handle), one sensor line that is never overwritten, Settings, dock. */
 .companion-header{display:flex;align-items:center;gap:6px;padding:0 8px 0 12px;height:44px;flex-shrink:0}
+/* Beside the studio the header is as tall as the toolbar and carries the same seam, so one rule runs edge to edge. */
+body[data-surface=studio] .companion-header{height:48px;border-bottom:1px solid var(--line)}
 #companion .companion-brand{display:flex;align-items:center;padding:6px;cursor:grab}#companion .companion-brand:disabled{opacity:1;cursor:default}.companion-brand .mark-live{width:22px;height:22px;display:block}
 .companion-sense{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:0;background:none;cursor:pointer;padding:6px 8px;border-radius:8px;font:inherit;font-size:12px}
 #companion .companion-sense:hover:not(:disabled){background:#242C40;color:var(--ink)}
