@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Agent mode: a customer lookup that matches nothing answers with the addresses the run has already read, so the agent searches by the address the request names instead of guessing a domain from the company name.
 - Agent mode: a run whose model gives up ends by its ledger. A DashClaw block reads Blocked, not Failed, and verified writes with the goal unmet read Partial, never Completed.
 - Agent mode never moves money without a person: a refund DashClaw allowed or only warned about (its interruption budget demotes a hold after 10 approvals of one kind in a day) is refused before the claim and closed on DashClaw as failed, and the installer marks both hold policies `ungrantable` so DashClaw keeps holding.
 - Agent mode, all three demos run live: the seed adds Globex, one $5,000.00 payment over the refund ceiling, so Demo C is a real DashClaw block; a blocked write carries the DashClaw action id for its `/decisions` page; the Gmail send takes the prepared message id in the shapes models actually send (with or without brackets, HTML-escaped, or the preparedId); the planner is told which plan fields carry a tool's arguments.

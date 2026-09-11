@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TOOLS,WRITE_TOOLS,READ_HANDLERS,listTools,validateCall} from '../lib/agent/tools.mjs';
+import {TOOLS,WRITE_TOOLS,READ_HANDLERS,listTools,validateCall,observedEmails} from '../lib/agent/tools.mjs';
 import {createRun} from '../lib/agent/run.mjs';
 import {FORBIDDEN_PATTERNS,emailReference} from '../lib/agent/facts.mjs';
 
@@ -211,3 +211,18 @@ test('the timing-promise pattern catches a range of days, not only a single numb
   for(const text of ['within 1–3 business days','within 3-5 working days','within 2 to 4 days','within 5 days']) assert.equal(pattern.test(text),true,text);
   for(const text of ['in a few days','refund re_123 succeeded on 2026-09-11']) assert.equal(pattern.test(text),false,text);
 });
+
+test('a Stripe lookup that matched nothing answers with the addresses the run already read, instead of leaving the model to guess',async()=>{
+  // Live Demo C in the panel, 2026-09-11: the model guessed the domain globex.com, matched no customer and stopped to ask.
+  const r=run();
+  r.sourceFacts.push({key:'request',value:'Hi, this is Dana at Globex. Please refund our last payment and confirm by email to demo+globex@example.com.',label:'request',source:'slack',ref:'C1/1.1'});
+  assert.deepEqual(observedEmails(r),['demo+globex@example.com']);
+  const providers={stripe:{async findCustomer(){return [];}}};
+  const miss=await READ_HANDLERS['stripe.find_customer']({args:{domain:'globex.com'},run:r,providers,now:()=>Date.now()});
+  assert.equal(miss.count,0);assert.match(miss.next,/demo\+globex@example\.com/);
+
+  const hit=await READ_HANDLERS['stripe.find_customer']({args:{email:'demo+globex@example.com'},run:r,providers:{stripe:{async findCustomer(){return [{id:'cus_1',email:'demo+globex@example.com',name:'Globex'}];}}},now:()=>Date.now()});
+  assert.equal(hit.count,1);assert.equal(hit.next,undefined,'a match needs no hint');
+  assert.equal(r.entities.stripeCustomer.id,'cus_1');
+});
+
