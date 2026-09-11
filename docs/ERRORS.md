@@ -2,6 +2,10 @@
 
 ## 2026-09-11: Self healing and the Agent Learning Loop
 
+- The first push of 0.18.0 went red on the Ubuntu CI job only: a candidate edit path written with backslashes named a
+  file literally called `lib\agent\effects.mjs` on Linux, where a backslash is an ordinary filename character, so the
+  edit missed and the protected-region test saw no touch. Fix: the path is normalized to forward slashes before it is
+  resolved, on every platform. Two clean local runs on Windows are not a Linux run; the Ubuntu job is the check.
 - A candidate worktree's `node_modules` was a junction back into the main tree's `node_modules`, and a recursive
   delete of the worktree followed the junction and emptied the repository's own `node_modules`. Fix: a candidate
   worktree lives at `.worktrees/<candidateId>` inside the repository, never a symlink, a junction, a copy or an
