@@ -16,6 +16,8 @@ import {AgentRuntime} from '../lib/agent/index.mjs';
 import {createRun,transition,planEffect,updateEffect,addApproval,TERMINAL} from '../lib/agent/run.mjs';
 import {finalStatus,summary} from '../lib/agent/run.mjs';
 import {executeWrite} from '../lib/agent/effects.mjs';
+import {runLoop} from '../lib/agent/loop.mjs';
+import {EMPTY_PLAN} from '../lib/agent/planner.mjs';
 import {createApp} from '../server.mjs';
 
 // The same hackathon policy pack eval/run.mjs starts the fake DashClaw server with (contract section 15): refunds are
@@ -446,5 +448,21 @@ test('a refund DashClaw allowed without holding it for a person is refused befor
   const approved=setup(stub('operator'));
   await executeWrite(approved,'stripe.refund_payment',{paymentId:'pi_1'});
   assert.equal(claims.length,1,'an approved action reaches the claim');
+});
+
+test('the loop ends a run by its ledger when the model replies fail: blocked stays blocked, verified work is partial',async()=>{
+  const ending=async(seed)=>{
+    const run=createRun({goal:GOAL_REFUND,model:'scripted',effort:'low'});
+    for(const status of seed){const e=planEffect(run,{tool:'stripe.refund_payment',app:'stripe',opKey:`refund:pi_${status}`});updateEffect(run,e.effectId,{status});}
+    const inference=async()=>({result:{...EMPTY_PLAN,kind:'fail',reason:'Cannot continue.',message:'The refund was blocked by policy; nothing more can be done.'}});
+    const handle={run,deps:{inference,providers:createFakeProviders({}),config:buildConfig('http://127.0.0.1:1')},signal:new AbortController().signal,
+      emit(){},persist:async()=>{},isCancelled:()=>false,waitForUser:async()=>null,waitForDecision:()=>new Promise(()=>{}),clearDecision(){}};
+    await runLoop(handle);
+    return run;
+  };
+  const blocked=await ending(['blocked']);
+  assert.equal(blocked.status,'blocked');assert.equal(blocked.closing,'','a policy block is not "The run could not finish."');
+  assert.equal((await ending(['verified'])).status,'partial');
+  assert.equal((await ending([])).status,'failed');
 });
 

@@ -168,3 +168,17 @@ test('a runtime refusal the model corrected is superseded by the verified write;
   assert.equal(finalStatus(blockedRun,{}),'partial');
   assert.equal(summary(blockedRun).writes.blocked,1);
 });
+
+test('a model that gives up never outranks the ledger: nothing done is failed, a block is blocked, verified writes are partial',()=>{
+  const withEffects=(...statuses)=>{
+    const run=createRun({goal:'g'});
+    statuses.forEach((status,i)=>{const e=planEffect(run,{tool:'stripe.refund_payment',app:'stripe',opKey:`refund:pi_${i}`});updateEffect(run,e.effectId,{status});});
+    return run;
+  };
+  assert.equal(finalStatus(withEffects(),{gaveUp:true}),'failed');
+  assert.equal(finalStatus(withEffects('blocked'),{gaveUp:true}),'blocked','live Demo C: a DashClaw block then fail read Failed');
+  assert.equal(finalStatus(withEffects('verified'),{gaveUp:true}),'partial','verified writes with the goal unmet are not completed');
+  assert.equal(finalStatus(withEffects('verified','blocked'),{gaveUp:true}),'partial');
+  assert.equal(finalStatus(withEffects('verified'),{}),'completed','without gaveUp the same ledger completes');
+});
+

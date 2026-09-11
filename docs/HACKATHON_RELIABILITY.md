@@ -294,6 +294,9 @@ properties above.
   refund DashClaw did not hold for a person and closes the action on DashClaw as failed (`REFUND_NOT_HELD`), and the
   two hold rows are installed `ungrantable`, which every automatic relief in DashClaw respects while a real operator
   approval still authorizes the claim.
+- **A model that gave up overrode the ledger.** In the panel, Demo C's model replied "cannot continue" after DashClaw
+  blocked the refund, and the run read Failed although its only write was a policy block. The model's `fail` now only
+  keeps a run from reading completed: the ledger decides between failed, blocked and partial.
 - **Gmail rewrites the Message-ID for gmail.com senders**, so the send is verified by the id Gmail returns and a lost
   answer is reconciled by the reference line in the body (see Gmail above).
 
