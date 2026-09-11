@@ -19,6 +19,7 @@
     "verify:browser": "node scripts/verify-browser.mjs",
     "verify:vision": "node scripts/verify-vision.mjs",
     "verify:recovery": "node scripts/verify-recovery.mjs",
+    "build:captures": "node scripts/build-captures.mjs",
     "build:site": "node scripts/build-site.mjs",
     "verify:site": "node scripts/verify-site.mjs",
     "build:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",

@@ -45,6 +45,19 @@ try {
   await page.getByRole('tab',{name:steps[3]}).press('Home');
   assert.equal(await page.getByRole('tab',{name:steps[0]}).getAttribute('aria-selected'),'true');
   assert.equal(await page.locator('#walkthrough img[src="/reference.svg"], #walkthrough img[src="/workbench.png"], #walkthrough img[src="/revision.png"]').count(),0);
+  // Every step shows the pane it describes, at the size it declares. Three of the four steps used to be text stand-ins
+  // for a picture, and the one real capture went two releases stale with its width and height still describing an
+  // older file, which reserves the wrong space and shifts the panel as it loads.
+  // The panel has to be the open one before its image is read: a lazy image inside a hidden panel never starts loading,
+  // so decode() on it waits for a request the browser will not make until a visitor opens that step.
+  for(const [index,panel,file] of [[0,'#journey-reference','/share.png'],[1,'#journey-prompt','/direct.png'],[2,'#journey-result','/streaming.png'],[3,'#journey-revision','/versions.png']]){
+    await page.getByRole('tab',{name:steps[index]}).click();
+    const image=page.locator(`${panel} img`);
+    assert.equal(await image.getAttribute('src'),file,`${panel} should show ${file}`);
+    const drawn=await image.evaluate(node=>node.decode().then(()=>[node.naturalWidth,node.naturalHeight,Number(node.getAttribute('width')),Number(node.getAttribute('height'))]));
+    assert.ok(drawn[0]>0,`${file} did not decode`);
+    assert.deepEqual([drawn[2],drawn[3]],[drawn[0],drawn[1]],`${file} declares ${drawn[2]}x${drawn[3]} and is ${drawn[0]}x${drawn[1]}`);
+  }
   assert.ok(await page.getByText('This site does not generate anything.',{exact:false}).isVisible());
   assert.equal(await page.locator('#demo, .sample, #reset-demo').count(),0);
   const faq = page.locator('summary').filter({hasText:'Can I generate here without installing anything?'});
@@ -66,7 +79,7 @@ try {
   const oldName=String.fromCharCode(74,97,114,118,105,115); // the old product name, spelled as char codes so this check doesn't trip the name gate on itself
   assert.doesNotMatch(bodyText,new RegExp(oldName,'i'),'the old product name is on the page');
   assert.doesNotMatch(await page.content(),new RegExp(oldName,'i'),'the old product name is in the page source');
-  for(const path of ['/robots.txt','/sitemap.xml','/llms.txt','/og.png','/mark.svg','/streaming.png','/computer.png','/plus-jakarta-sans-700.woff2']) assert.equal((await page.request.get(`${base}${path}`)).status(),200,path);
+  for(const path of ['/robots.txt','/sitemap.xml','/llms.txt','/og.png','/mark.svg','/streaming.png','/computer.png','/share.png','/direct.png','/versions.png','/plus-jakarta-sans-700.woff2']) assert.equal((await page.request.get(`${base}${path}`)).status(),200,path);
   for(const path of ['/api/session','/server.mjs','/.env','/demo.html','/reference.svg','/workbench.png','/revision.png']) assert.equal((await page.request.get(`${base}${path}`)).status(),404,path);
   await page.getByRole('link',{name:'Computer mode',exact:true}).click();
   await page.locator('#computer img').evaluate(image=>image.decode());
@@ -93,5 +106,5 @@ try {
     await page.locator('#walkthrough').screenshot({path:`.artifacts/walkthrough-${panel}-desktop.png`});
   }
   assert.deepEqual(errors,[]);
-  console.log(`PASS: ${base}; Current walkthrough verified: 4 steps on desktop and mobile, keyboard arrows/Home/End, draft image and replay disclosure, the self-hosted wordmark face loaded, Computer mode guide on desktop/mobile, 8 public assets, 7 removed/private routes, pinned download, no overflow or browser errors.`);
+  console.log(`PASS: ${base}; Current walkthrough verified: 4 steps on desktop and mobile, keyboard arrows/Home/End, draft image and replay disclosure, the self-hosted wordmark face loaded, Computer mode guide on desktop/mobile, 11 public assets, 7 removed/private routes, pinned download, no overflow or browser errors.`);
 } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}

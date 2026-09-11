@@ -7,10 +7,10 @@ const origin = 'https://sidelook.practicalsystems.io';
 await mkdir(out, { recursive:true });
 // Remove the obsolete generated sample; the local app keeps its own example.
 for (const file of ['demo.html','reference.svg','workbench.png','revision.png']) await unlink(join(out,file)).catch(error=>{if(error.code!=='ENOENT') throw error;});
-const allowed = new Set(['index.html','site.css','site.js','vercel.json','mark.svg','plus-jakarta-sans-700.woff2','plus-jakarta-sans-OFL.txt','streaming.png','computer.png','companion.png','og.png','robots.txt','sitemap.xml','llms.txt','.vercel','.env.local','.gitignore']);
+const allowed = new Set(['index.html','site.css','site.js','vercel.json','mark.svg','plus-jakarta-sans-700.woff2','plus-jakarta-sans-OFL.txt','streaming.png','computer.png','companion.png','share.png','direct.png','versions.png','og.png','robots.txt','sitemap.xml','llms.txt','.vercel','.env.local','.gitignore']);
 for (const name of await readdir(out)) if (!allowed.has(name)) throw new Error(`Unexpected deployment file: ${name}. Review it before building.`);
 for (const file of ['index.html','site.css','site.js','vercel.json','plus-jakarta-sans-700.woff2','plus-jakarta-sans-OFL.txt']) await copyFile(join('site',file),join(out,file));
-for (const [source,target] of [['public/mark.svg','mark.svg'],['docs/images/streaming.png','streaming.png'],['docs/images/social.png','og.png'],['docs/images/computer.png','computer.png'],['docs/images/companion.png','companion.png']]) await copyFile(source,join(out,target));
+for (const [source,target] of [['public/mark.svg','mark.svg'],['docs/images/streaming.png','streaming.png'],['docs/images/social.png','og.png'],['docs/images/computer.png','computer.png'],['docs/images/companion.png','companion.png'],['docs/images/share.png','share.png'],['docs/images/direct.png','direct.png'],['docs/images/versions.png','versions.png']]) await copyFile(source,join(out,target));
 await writeFile(join(out,'robots.txt'),`User-agent: *\nAllow: /\nDisallow: /demo.html\nDisallow: /api/\nDisallow: /dashboard/\nDisallow: /thanks/\nSitemap: ${origin}/sitemap.xml\n`);
 await writeFile(join(out,'sitemap.xml'),`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${origin}/</loc></url></urlset>\n`);
 await writeFile(join(out,'llms.txt'),`# sidelook
