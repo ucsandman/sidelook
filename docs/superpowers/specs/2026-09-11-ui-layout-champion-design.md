@@ -865,6 +865,15 @@ Numbers are the judges' list. Duplicates share a line.
 - 60 — `#computer-status` already sits two lines under Plan next action; moving it above the consent sentence would separate the button from what it sends.
 - 65 — a 64dvh sheet grows the native panel to the dialog's full `scrollHeight` (companion.js:126) and feeds `dvh` back into the posted height.
 
+## Appendix C — Deviations during the build
+
+- The two verifier assertions (V1, V2) select the scroller by class (`.agent-body`, `.computer-body`) so they were valid on the unchanged UI for the red run; the ids from 4.3 and 4.4 also exist.
+- Live build lives on the status line (`.source-line`: `#source-status` then `#live-start`/`#live-pause`, right-aligned) rather than at the end of `.source-controls`: at the 380px pane the sources row wrapped and orphaned Sample sketch, and the state of the shared screen and the one action that depends on it belong on one row.
+- Beside the studio the panel header is 48px with a bottom rule (`body[data-surface=studio] .companion-header`), so the toolbar seam runs edge to edge; the native panel keeps 44px.
+- `.agent-event-detail` takes `flex:1 1 calc(100% - 64px)` so a detail always starts its own line with room for Details at the end; the spec's `flex:1 1 0;min-width:70%` let a short label share the row.
+- `.live-heading strong` is Segoe UI 14/500, not upright Georgia (DESIGN.md reserves Georgia for the italic display line).
+- The F6 handler picks the first control with `offsetParent !== null`; the spec's selector matched a button inside a hidden wrapper. verify-browser walks the four panes.
+
 ## Appendix B — Champion items corrected against the code
 
 - Ctrl+Enter submit: dropped; app.js:557 already builds on Enter and inserts a newline on Shift+Enter, matching the panel.

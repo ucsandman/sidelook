@@ -1,5 +1,21 @@
 # Implementation lessons
 
+## 2026-09-11: Bench, the champion UI
+
+- A Workflow agent's return value is its last assistant message. The tournament synthesizer wrote a 76K-character spec that
+  the model split across two messages, so the skeptic stage received the final 1.4K characters and refuted a fragment. The
+  full text was recovered from the agent transcript. Fix for next time: a stage that can answer long writes the artifact to
+  a file and returns the path; the script forwards the file.
+- `button:not([hidden])` still matches a button whose wrapper is hidden, and `focus()` on it does nothing. The studio's F6
+  handler passed review and never left the direction pane; a visible-control pick (`offsetParent !== null`) fixed it and
+  verify-browser now walks the panes. A keyboard path gets a browser check, not a code read.
+- A brief that says "keep every other rule byte-identical" and "implement this block" gets the block appended after the
+  rules it replaces, so eight selectors were declared twice and only source order kept the result right. Say "edit these
+  rules in place" when the new block supersedes old ones.
+- The five browser verifiers write their PNGs into `.artifacts/`; reading those images after each run caught four polish
+  defects the assertions cannot see (a wrapped control row, a 4px seam mismatch, a squeezed timeline label, an upright
+  serif in a UI label). The screenshots are part of the check, not a by-product.
+
 ## 2026-09-11: Self healing and the Agent Learning Loop
 
 - The first push of 0.18.0 went red on the Ubuntu CI job only: a candidate edit path written with backslashes named a
