@@ -121,7 +121,7 @@ The repository was made public again (it had been private since some point after
 
 ## After 0.18.0: the walkthrough shows the studio
 
-The four walkthrough steps carry captures of the real panes (`share.png`, `direct.png`, `streaming.png`, `versions.png`), the first three written by `npm run build:captures` against the running studio with the recorded fixture, at `deviceScaleFactor` 2 because `.current-capture img` caps a capture at 660 CSS pixels tall and scales it to the 682-pixel column. A capture taller than about 1.03:1 is letterboxed by that cap, so the stage shot is taken in a 1440x760 window. The deployment allowlist is 17 public files (the dry run lists them and no environment file). verify-site now asserts each step's image, its decode and its declared size.
+The four walkthrough steps carry captures of the real panes (`share.png`, `direct.png`, `streaming.png`, `versions.png`), the first three written by `npm run build:captures` against the running studio with the recorded fixture, at `deviceScaleFactor` 2 because `.current-capture img` caps a capture at 660 CSS pixels tall and scales it to the 682-pixel column. A capture taller than about 1.03:1 is letterboxed by that cap, so the stage shot is taken in a 1440x760 window. The deployment allowlist is 17 public files (the dry run lists them and no environment file). verify-site now asserts each step's image, its decode and its declared size. Live on production deployment dpl_4RjjAGmHFAMfePDHwku8mhYTYbeX; `node scripts/verify-site.mjs https://sidelook.practicalsystems.io` passes against it and the three new files hash identical to `docs/images`.
 
 ## 0.17.0 Local models, the Bench button, three words under the conversation
 
