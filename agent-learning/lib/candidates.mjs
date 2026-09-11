@@ -70,9 +70,11 @@ export async function applyEdits(root,edits){
     if(typeof edit.file!=='string' || !edit.file || isAbsolute(edit.file)){
       return {ok:false,filesChanged,failed:{file:edit.file,reason:'edit_failed'}};
     }
-    const path=resolve(root,edit.file);
-    if(!(path+sep).startsWith(rootAbs+sep)) return {ok:false,filesChanged,failed:{file:edit.file,reason:'edit_failed'}};
+    // A model-authored path may carry backslashes; on Linux a backslash is an ordinary filename character, so the path is
+    // read the way it was meant on every platform (the same file, forward slashes) before it is resolved or checked.
     const normalizedFile=edit.file.replaceAll('\\','/');
+    const path=resolve(root,normalizedFile);
+    if(!(path+sep).startsWith(rootAbs+sep)) return {ok:false,filesChanged,failed:{file:edit.file,reason:'edit_failed'}};
     if(edit.create){
       if(typeof edit.content!=='string') return {ok:false,filesChanged,failed:{file:edit.file,reason:'edit_failed'}};
       await mkdir(dirname(path),{recursive:true});
