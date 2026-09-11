@@ -383,10 +383,12 @@ function aggregate(results) {
 const verdict = r => (r.pass ? 'PASS' : r.pendingEngineFix ? 'PENDING' : 'FAIL');
 
 function printTable(results) {
-  console.log('id  name                                              status      pass');
+  // Regression ids are strings (reg_…), wider than the numeric eval ids; the id column grows to the widest one present.
+  const idWidth = Math.max(4, ...results.map(r => String(r.id).length + 2));
+  console.log(`${'id'.padEnd(idWidth)}${'name'.padEnd(50)}status      pass`);
   for (const r of results) {
     const status = (r.error ? `error:${r.error.code}` : r.status).padEnd(11);
-    console.log(`${String(r.id).padEnd(4)}${r.name.slice(0, 50).padEnd(50)}${status} ${verdict(r)}`);
+    console.log(`${String(r.id).padEnd(idWidth)}${r.name.slice(0, 48).padEnd(50)}${status} ${verdict(r)}`);
     if (!r.pass) for (const c of r.checks.filter(c => !c.pass)) console.log(`      ${c.name}: expected ${JSON.stringify(c.expected)}, got ${JSON.stringify(c.actual)}`);
     if (r.error) console.log(`      ${r.error.message}`);
   }

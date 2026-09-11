@@ -1,0 +1,30 @@
+{
+  "incidentId": "inc_f7428790ecdc158b2f33",
+  "runId": "run_partial_hubspot_3",
+  "at": "2026-09-10T14:02:00.000Z",
+  "updatedAt": "2026-09-10T14:02:30.000Z",
+  "integration": "hubspot",
+  "tool": "hubspot.update_customer",
+  "operation": "hubspot.update_customer",
+  "phase": "execute",
+  "failureClass": "transient_provider",
+  "family": "hubspot:transient_provider:hubspot.update_customer",
+  "severity": "warn",
+  "providerStatus": 503,
+  "attemptNumber": 3,
+  "providerOperationId": null,
+  "dashclawActionId": "act_hubspot_1",
+  "effectId": "fx_hubspot_1",
+  "knownState": "not_sent",
+  "uncertainState": false,
+  "recoveryAttempted": true,
+  "recoveryStrategy": "retry",
+  "recoveryResult": "retried_failed",
+  "verificationResult": "n/a",
+  "sanitizedEvidence": {
+    "code": "SERVER",
+    "message": "HubSpot returned a server error after 3 attempts.",
+    "ids": {}
+  },
+  "finalDisposition": "partial"
+}

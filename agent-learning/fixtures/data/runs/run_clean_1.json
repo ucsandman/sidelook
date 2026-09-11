@@ -1,0 +1,38 @@
+{
+  "runId": "run_clean_1",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "createdAt": "2026-09-11T10:00:00.000Z",
+  "updatedAt": "2026-09-11T10:01:40.000Z",
+  "status": "completed",
+  "model": "sonnet",
+  "effort": "medium",
+  "turn": 6,
+  "currentStep": null,
+  "context": { "windowTitle": "Acme Inc — Slack" },
+  "entities": {},
+  "sourceFacts": [],
+  "events": [
+    { "id": "ev_1", "at": "2026-09-11T10:00:00.000Z", "turn": 0, "kind": "phase", "status": "started", "label": "planning", "detail": "", "step": null, "app": null, "evidence": null, "actionId": null, "effectId": null, "incidentId": null },
+    { "id": "ev_2", "at": "2026-09-11T10:00:40.000Z", "turn": 3, "kind": "write", "status": "verified", "label": "Stripe refund verified", "detail": "", "step": null, "app": "stripe", "evidence": null, "actionId": "act_stripe_5", "effectId": "fx_stripe_5", "incidentId": null },
+    { "id": "ev_3", "at": "2026-09-11T10:01:00.000Z", "turn": 4, "kind": "write", "status": "verified", "label": "HubSpot lead marked unqualified", "detail": "", "step": null, "app": "hubspot", "evidence": null, "actionId": "act_hubspot_5", "effectId": "fx_hubspot_5", "incidentId": null },
+    { "id": "ev_4", "at": "2026-09-11T10:01:30.000Z", "turn": 5, "kind": "write", "status": "verified", "label": "Confirmation email sent", "detail": "", "step": null, "app": "gmail", "evidence": null, "actionId": "act_gmail_5", "effectId": "fx_gmail_5", "incidentId": null }
+  ],
+  "effects": [
+    { "effectId": "fx_stripe_5", "tool": "stripe.refund_payment", "app": "stripe", "opKey": "refund_payment", "status": "verified", "attempts": 1, "executions": 1, "reconciliations": [], "verification": { "verified": true }, "error": null, "actionId": "act_stripe_5", "series": 0 },
+    { "effectId": "fx_hubspot_5", "tool": "hubspot.update_customer", "app": "hubspot", "opKey": "update_customer", "status": "verified", "attempts": 1, "executions": 1, "reconciliations": [], "verification": { "verified": true }, "error": null, "actionId": "act_hubspot_5", "series": 0 },
+    { "effectId": "fx_gmail_5", "tool": "gmail.send_message", "app": "gmail", "opKey": "send_message", "status": "verified", "attempts": 1, "executions": 1, "reconciliations": [], "verification": { "verified": true }, "error": null, "actionId": "act_gmail_5", "series": 0 }
+  ],
+  "approvals": [
+    { "status": "approved", "decidedVia": "sidelook", "actionId": "act_stripe_5", "createdAt": "2026-09-11T10:00:10.000Z", "decidedAt": "2026-09-11T10:00:20.000Z" }
+  ],
+  "clarification": null,
+  "errors": [],
+  "summary": { "reads": 5, "writes": 3, "verified": 3, "duplicates": 0, "incidents": { "total": 0, "recovered": 0, "open": 0 }, "recoveries": 0 },
+  "dashclaw": { "sessionId": "sess_5", "actionIds": ["act_stripe_5", "act_hubspot_5", "act_gmail_5"] },
+  "injection": [],
+  "finalMessage": "Refunded the last Stripe payment, marked the CRM lead unqualified, and sent the confirmation email.",
+  "closing": "completed",
+  "incidents": [],
+  "resume": null,
+  "lineage": null
+}

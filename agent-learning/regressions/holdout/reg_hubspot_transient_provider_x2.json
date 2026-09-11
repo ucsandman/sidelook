@@ -1,0 +1,22 @@
+{
+  "id": "reg_hubspot_transient_provider_x2",
+  "name": "hubspot:transient_provider:hubspot.update_customer (starter, fails twice then recovers)",
+  "set": "holdout",
+  "status": "confirmed",
+  "family": "hubspot:transient_provider:hubspot.update_customer",
+  "source": { "incidentIds": [], "runIds": [], "learnRunId": null, "createdAt": "2026-09-11T00:00:00.000Z" },
+  "fingerprint": "dc14ccbbeacb03b58875567caecc851e437173efb7615b02656dec734f58b0e5",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "fixtures": {},
+  "faults": { "hubspot.updateContact": { "kind": "failTimes", "times": 2 } },
+  "dashclaw": { "approvalScript": "approve" },
+  "model": {},
+  "expect": {
+    "status": "completed",
+    "writes": { "duplicate": 0, "verified": 3 },
+    "approvals": { "decision": "approved" },
+    "recovered": true,
+    "noSuccessClaim": true,
+    "state": { "refunds": 1 }
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "runId": "run_partial_hubspot_2",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "createdAt": "2026-09-09T14:00:00.000Z",
+  "updatedAt": "2026-09-09T14:02:30.000Z",
+  "status": "partial",
+  "model": "sonnet",
+  "effort": "medium",
+  "turn": 5,
+  "currentStep": null,
+  "context": {
+    "windowTitle": "Acme Inc — Slack"
+  },
+  "entities": {},
+  "sourceFacts": [],
+  "events": [
+    {
+      "id": "ev_1",
+      "at": "2026-09-09T14:00:00.000Z",
+      "turn": 0,
+      "kind": "phase",
+      "status": "started",
+      "label": "planning",
+      "detail": "",
+      "step": null,
+      "app": null,
+      "evidence": null,
+      "actionId": null,
+      "effectId": null,
+      "incidentId": null
+    },
+    {
+      "id": "ev_2",
+      "at": "2026-09-09T14:01:00.000Z",
+      "turn": 2,
+      "kind": "write",
+      "status": "verified",
+      "label": "Stripe refund verified",
+      "detail": "",
+      "step": null,
+      "app": "stripe",
+      "evidence": null,
+      "actionId": "act_stripe_1",
+      "effectId": "fx_stripe_1",
+      "incidentId": null
+    },
+    {
+      "id": "ev_3",
+      "at": "2026-09-09T14:02:00.000Z",
+      "turn": 4,
+      "kind": "write",
+      "status": "failed",
+      "label": "HubSpot update failed after 3 attempts",
+      "detail": "HubSpot returned a server error after 3 attempts.",
+      "step": null,
+      "app": "hubspot",
+      "evidence": null,
+      "actionId": "act_hubspot_1",
+      "effectId": "fx_hubspot_1",
+      "incidentId": "inc_fae04b00feb25d8da242"
+    }
+  ],
+  "effects": [
+    {
+      "effectId": "fx_stripe_1",
+      "tool": "stripe.refund_payment",
+      "app": "stripe",
+      "opKey": "refund_payment",
+      "status": "verified",
+      "attempts": 1,
+      "executions": 1,
+      "reconciliations": [],
+      "verification": {
+        "verified": true
+      },
+      "error": null,
+      "actionId": "act_stripe_1",
+      "series": 0
+    },
+    {
+      "effectId": "fx_hubspot_1",
+      "tool": "hubspot.update_customer",
+      "app": "hubspot",
+      "opKey": "update_customer",
+      "status": "failed",
+      "attempts": 3,
+      "executions": 0,
+      "reconciliations": [],
+      "verification": {
+        "verified": null
+      },
+      "error": {
+        "code": "SERVER"
+      },
+      "actionId": "act_hubspot_1",
+      "series": 0
+    }
+  ],
+  "approvals": [
+    {
+      "status": "approved",
+      "decidedVia": "sidelook",
+      "actionId": "act_stripe_1",
+      "createdAt": "2026-09-08T14:00:30.000Z",
+      "decidedAt": "2026-09-08T14:00:45.000Z"
+    }
+  ],
+  "clarification": null,
+  "errors": [
+    {
+      "at": "2026-09-09T14:02:00.000Z",
+      "code": "SERVER",
+      "message": "HubSpot returned a server error after 3 attempts.",
+      "step": "hubspot.update_customer"
+    }
+  ],
+  "summary": {
+    "reads": 4,
+    "writes": 2,
+    "verified": 1,
+    "duplicates": 0,
+    "incidents": {
+      "total": 1,
+      "recovered": 0,
+      "open": 0
+    },
+    "recoveries": 0
+  },
+  "dashclaw": {
+    "sessionId": "sess_1",
+    "actionIds": [
+      "act_stripe_1",
+      "act_hubspot_1"
+    ]
+  },
+  "injection": [],
+  "finalMessage": "Refunded the last Stripe payment; HubSpot could not be updated after three attempts. Please update the CRM lead by hand.",
+  "closing": "partial",
+  "incidents": [
+    {
+      "incidentId": "inc_fae04b00feb25d8da242",
+      "runId": "run_partial_hubspot_2",
+      "at": "2026-09-09T14:02:00.000Z",
+      "updatedAt": "2026-09-09T14:02:30.000Z",
+      "integration": "hubspot",
+      "tool": "hubspot.update_customer",
+      "operation": "hubspot.update_customer",
+      "phase": "execute",
+      "failureClass": "transient_provider",
+      "family": "hubspot:transient_provider:hubspot.update_customer",
+      "severity": "warn",
+      "providerStatus": 503,
+      "attemptNumber": 3,
+      "providerOperationId": null,
+      "dashclawActionId": "act_hubspot_1",
+      "effectId": "fx_hubspot_1",
+      "knownState": "not_sent",
+      "uncertainState": false,
+      "recoveryAttempted": true,
+      "recoveryStrategy": "retry",
+      "recoveryResult": "retried_failed",
+      "verificationResult": "n/a",
+      "sanitizedEvidence": {
+        "code": "SERVER",
+        "message": "HubSpot returned a server error after 3 attempts.",
+        "ids": {}
+      },
+      "finalDisposition": "partial"
+    }
+  ],
+  "resume": null,
+  "lineage": null
+}

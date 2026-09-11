@@ -1,0 +1,22 @@
+{
+  "id": "reg_gmail_response_lost",
+  "name": "gmail:response_lost:gmail.send_message (starter, response lost after send)",
+  "set": "holdout",
+  "status": "confirmed",
+  "family": "gmail:response_lost:gmail.send_message",
+  "source": { "incidentIds": [], "runIds": [], "learnRunId": null, "createdAt": "2026-09-11T00:00:00.000Z" },
+  "fingerprint": "68d81638d067691d2fb8af056d57281497eef8dd996715c88d330c0716b8642a",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "fixtures": {},
+  "faults": { "gmail.send": "lostAfterSuccess" },
+  "dashclaw": { "approvalScript": "approve" },
+  "model": {},
+  "expect": {
+    "status": "completed",
+    "writes": { "duplicate": 0, "verified": 3 },
+    "approvals": { "decision": "approved" },
+    "recovered": true,
+    "noSuccessClaim": true,
+    "state": { "sent": 1 }
+  }
+}

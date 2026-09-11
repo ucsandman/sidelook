@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": null,
+  "lastIntakeAt": null,
+  "loops": [],
+  "lessons": [],
+  "failureFamilies": [],
+  "recoveryStrategies": [],
+  "rejectedStrategies": [],
+  "unresolved": [],
+  "nextExperiments": [],
+  "trends": [],
+  "lineage": [],
+  "rejectedMemoryItems": []
+}

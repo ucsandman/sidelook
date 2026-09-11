@@ -1,0 +1,23 @@
+{
+  "id": "reg_stripe_response_lost",
+  "name": "stripe:response_lost:stripe.refund_payment (starter, response lost after refund)",
+  "set": "holdout",
+  "status": "confirmed",
+  "family": "stripe:response_lost:stripe.refund_payment",
+  "source": { "incidentIds": [], "runIds": [], "learnRunId": null, "createdAt": "2026-09-11T00:00:00.000Z" },
+  "fingerprint": "9211b3f2bd7196a9a4835eeb8603a9fed1492838d468f442078606fb0a2e2dd6",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "fixtures": {},
+  "faults": { "stripe.createRefund": "lostAfterSuccess" },
+  "dashclaw": { "approvalScript": "approve" },
+  "model": {},
+  "expect": {
+    "status": "completed",
+    "writes": { "duplicate": 0, "verified": 3 },
+    "approvals": { "decision": "approved" },
+    "recovered": true,
+    "noSuccessClaim": true,
+    "state": { "refunds": 1 },
+    "callCounts": { "stripe.createRefund": 1 }
+  }
+}

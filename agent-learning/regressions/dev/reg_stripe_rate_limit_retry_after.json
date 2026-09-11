@@ -1,0 +1,22 @@
+{
+  "id": "reg_stripe_rate_limit_retry_after",
+  "name": "stripe:rate_limit:stripe.refund_payment (starter, honours Retry-After)",
+  "set": "dev",
+  "status": "confirmed",
+  "family": "stripe:rate_limit:stripe.refund_payment",
+  "source": { "incidentIds": [], "runIds": [], "learnRunId": null, "createdAt": "2026-09-11T00:00:00.000Z" },
+  "fingerprint": "87ab0ea1a6176ff1831166cf5c1f8d48bb7af3f887b42072254788b9b43e0a42",
+  "goal": "Acme cancellation: refund the last payment, mark the CRM lead unqualified, and email confirmation.",
+  "fixtures": {},
+  "faults": { "stripe.createRefund": { "kind": "rateLimit", "times": 1, "retryAfterMs": 50 } },
+  "dashclaw": { "approvalScript": "approve" },
+  "model": {},
+  "expect": {
+    "status": "completed",
+    "writes": { "duplicate": 0, "verified": 3 },
+    "approvals": { "decision": "approved" },
+    "recovered": true,
+    "noSuccessClaim": true,
+    "state": { "refunds": 1 }
+  }
+}
