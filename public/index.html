@@ -170,6 +170,8 @@
     </section>
     <section id="agent-mode" class="agent-mode" aria-label="Agent mode" hidden>
       <div class="agent-head"><button type="button" class="quiet" id="agent-back">‹ Back</button><strong id="agent-title">Agent mode</strong><span id="agent-status"></span></div>
+      <p id="agent-lineage" class="agent-lineage" hidden></p>
+      <ul id="agent-breakers" class="agent-breakers" aria-label="Paused integrations" hidden></ul>
       <div class="agent-body">
         <section id="agent-start">
           <textarea id="agent-goal" maxlength="2000" rows="4" aria-label="What should the agent accomplish?" placeholder="Resolve Acme's cancellation request: refund the most recent eligible payment, update the CRM, and email them confirmation."></textarea>
@@ -201,6 +203,15 @@
           <section id="agent-summary" hidden aria-label="Run summary">
             <p id="agent-summary-line"></p>
             <ol id="agent-effects"></ol>
+            <p id="agent-resume" hidden></p>
+            <div class="agent-row">
+              <button type="button" class="quiet" id="agent-diagnostics-toggle" aria-expanded="false" aria-controls="agent-diagnostics">Diagnostics</button>
+              <button type="button" class="button amber" id="agent-continue" hidden>Continue</button>
+            </div>
+            <div id="agent-diagnostics" hidden>
+              <ol id="agent-diagnostics-incidents" aria-label="Incidents"></ol>
+              <ol id="agent-diagnostics-breakers" aria-label="Circuit breakers"></ol>
+            </div>
             <p id="agent-closing" hidden></p>
             <p id="agent-final" hidden><b>The agent said</b> <span id="agent-final-text"></span></p>
           </section>

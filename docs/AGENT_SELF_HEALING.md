@@ -134,7 +134,7 @@ export const RECOVERY_POLICY = {
   user_cancellation:         { writes:{retryWhen:'never'}, none:true },
   unknown_external_state:    { writes:{retryWhen:'never', onExhausted:'stop_uncertain'}, breaker:null, user:'notify' },
   model_transport_failure:   { model:{reprompt:true, maxConsecutive:2}, breaker:'model', user:'none' },
-  precondition_refused:      { none:true }
+  precondition_refused:      { writes:{beforeRetry:'none', retryWhen:'never', onExhausted:'fail_closed'}, none:true }   // a CONFIG refusal on a write ends it closed
 };
 
 export function decideWrite({failureClass, attempt, spec, finding, retryAfterMs, cancelled})
@@ -154,7 +154,9 @@ Rules the table encodes, in words:
 7. A verification mismatch re-reads (bounded) and never re-executes.
 8. A model fault is re-prompted once with the error; two consecutive faults end the run `failed`.
 
-`decideWrite` is pure and unit-tested against every class × every finding. `effects.mjs` calls it from `performAndVerify` and records the decision on the incident (`recoveryStrategy`) before acting on it.
+`decideWrite` is pure and unit-tested against every class × every finding. `effects.mjs` calls it from `performAndVerify` and records the decision on the incident (`recoveryStrategy`) before acting on it. One incident covers one fault episode of one effect: a second attempt that fails the same way updates `attemptNumber` and the evidence on the same record rather than adding another, so three exhausted attempts read as one incident with `attemptNumber: 3`, not three.
+
+A fresh attempt after one that consumed a DashClaw action and ended `failed` (the provider proved nothing was written, or the request never left) is a new logical attempt: `nextSeries(run, tool, opKey)` in `run.mjs` gives it `series + 1`, a new idempotency key and a new DashClaw action (and, for a held write, a new approval). A `blocked`, `rejected` or `expired` attempt keeps its key on purpose: DashClaw's refusal is final and a replay reads the same verdict.
 
 ## 5. Circuit breakers (`lib/agent/breakers.mjs`)
 
@@ -179,8 +181,10 @@ export class CircuitBreakers {
   constructor({policy=BREAKER_POLICY, now=Date.now, path=null})   // path: optional JSON snapshot, atomic write, loaded on construct
   check(integration, {kind:'read'|'write'|'model'}) → {open:false} | {open:true, key, failureClass, reason, until, failures, halfOpen:false}
   // half-open: after cooldown the next check answers {open:false, trial:true} once; the following recordSuccess closes, recordFailure re-opens
-  recordFailure(integration, failureClass, at) → {opened:boolean, key, failures}
-  recordSuccess(integration, at)                 // closes a half-open breaker for that integration, clears its window
+  recordFailure(integration, failureClass, at) → {opened:boolean, key, failures, tracked}
+  recordSuccess(integration)                     // closes a half-open breaker for that integration and clears the counts of outage-shaped
+                                                 // classes (transient_provider, timeout_before_request, rate_limit, dashclaw_unavailable);
+                                                 // an authentication or model count is not disproved by an unrelated call succeeding and ages out by its window alone
   snapshot() → [{key, integration, failureClass, state:'closed'|'open'|'half_open', failures, openedAt, until, reason}]
   reset(key)                                     // operator action only (a diagnostics op), never called by the runtime
 }
@@ -245,7 +249,7 @@ The panel shows **Continue** on such a run's summary block; the child's timeline
 - `tools.mjs`: read failures classify and record incidents (severity `warn`), and call `breakers.recordFailure`/`recordSuccess`.
 - `index.mjs`: `deps.breakers` (built in `createAgentRuntime` with the snapshot path; tests inject one), `deps.incidents` (an `IncidentStore`); the handle gains `recordIncident(incident)` which persists through the store; `reconcileStored` uses resume; `continueRun`; `diagnostics()`; `create()` refuses while the model breaker is open; `finalizeIncidents` runs in `terminate`.
 - `health.mjs`: adds `breakers` to the health payload.
-- `server.mjs`: ops `continue` and `diagnostics` (`{incidents:[…for a run or the newest 50], breakers, resume}`); the watch stream closing before terminal records a `renderer_interruption` incident with `severity:'info'`, `recoveryResult:'none'` (the page reconnects on its own).
+- `server.mjs`: ops `continue` (`{run, consent:true, model, effort}` → `{run, remaining}`; 409 `NOT_CONTINUABLE` for a completed run, 409 `RUN_ACTIVE` while one runs) and `diagnostics` (`{run?}` → `{runId, incidents:[sanitized], summary:{total, recovered, open, bySeverity, byClass}, breakers, resume, lineage}`; without a run id the newest 50 incidents from the store); the watch stream closing before terminal records a `renderer_interruption` incident with `severity:'info'`, `recoveryResult:'none'` (the page reconnects on its own). `AgentRuntime.create()` answers 429 `MODEL_PAUSED` while the model breaker is open.
 
 Every existing eval scenario (1 to 26) and every existing test keeps passing; the policy table reproduces today's decisions exactly and adds Retry-After handling.
 
@@ -270,9 +274,9 @@ Nothing in the runtime reads the learning corpus, and no run rewrites itself. Th
 | 13 | A. HubSpot transient failure after a Stripe refund | `completed`, `state.refunds:1`, `duplicate:0`, `recovered`, an incident `hubspot:transient_provider:hubspot.update_customer` with `recoveryResult:'recovered'`, the sweep row "Previous refund verified" |
 | 11 | B. Stripe response lost after refund submission | `completed`, `state.refunds:1`, `callCounts.stripe.createRefund:1`, an incident `stripe:response_lost:…` with `recoveryStrategy:'reconcile'`, `recoveryResult:'reconciled_present'`, and no retry before the reconcile read |
 | 27 | HubSpot rate limit with Retry-After | the write waits the header's delay (fixture 50 ms), reconciles first, retries once, verifies; incident `rate_limit` recovered |
-| 28 | Stripe authentication expired twice | second run: the breaker is open, the refund is refused `CIRCUIT_OPEN` before any DashClaw call (`callCounts.stripe.createRefund:0`, no action recorded), health lists the breaker |
+| 28 | Stripe authentication expired twice | run 1 hits the dead token twice (the model asks once more after the fail-closed answer: a new action, a new approval, the same token) and the breaker opens; run 2 cannot even look the customer up: every Stripe call is refused `CIRCUIT_OPEN` before it is made, nothing reaches DashClaw, the run ends `failed` with the breaker named on the read that was not sent, `callCounts.stripe.createRefund:2` |
 | 29 | DashClaw unavailable twice opens its breaker | third write refused without a network call; `GOVERNANCE_UNAVAILABLE`; breaker in health |
-| 30 | Continue after a partial run | run 1: HubSpot `failAlways` → `partial`; `continue` → run 2 with lineage: refund not repeated (`state.refunds:1`, no new Stripe action), HubSpot verified, email sent once; `summary.duplicates:0` |
+| 30 | Continue after a partial run | run 1: HubSpot `failAlways` → `partial`, six failures open the HubSpot breaker; the operator clears the pause (the Diagnostics action the harness performs through `breakers.reset`) and presses `continue` → run 2 with lineage: refund not repeated (`state.refunds:1`, no new Stripe action), HubSpot verified, email sent once; `summary.duplicates:0` |
 | 31 | Continue after an uncertain run reconciles first | run 1: Stripe `lostAfterSuccess` + `findRefunds failAlways` → `uncertain`; clear the fault; `continue` → the inherited effect reconciles present, no second refund, outcome on the parent's action |
 | 32 | Model breaker | four malformed turns across two runs open `model:malformed_model_output`; a third `create` is refused `MODEL_PAUSED` |
 

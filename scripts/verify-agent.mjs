@@ -3,18 +3,27 @@ import {createApp} from '../server.mjs';
 import {AppError} from '../lib/vision.mjs';
 import {browserTools} from './browser.mjs';
 import {createRun,appendEvent,transition,planEffect,updateEffect,addApproval,resolveApproval,finish,snapshot,TERMINAL} from '../lib/agent/run.mjs';
+import {lineageFor} from '../lib/agent/resume.mjs';
 
 const wait = ms => new Promise(resolve => setTimeout(resolve,ms));
 const plural = (n,word) => `${n} ${word}${n===1?'':'s'}`;
-// Mirrors public/agent.js's summaryLine(): plurals, then the refusal counts (only the ones above zero) appended.
+// Mirrors public/agent.js's summaryLine(): plurals, the refusal counts, then the self-healing counts (only the ones
+// above zero) appended, in that order. Contract: docs/AGENT_SELF_HEALING.md section 8.
 const summaryLine = s => {
-  const w = s.writes,a = s.approvals;
+  const w = s.writes,a = s.approvals,inc = s.incidents || {};
   const parts = [plural(s.apps,'app'),plural(s.toolCalls,'tool call'),`${w.executed} of ${w.planned} write${w.planned===1?'':'s'} executed`,
     `${w.verified} verified`,plural(a.required,'approval'),plural(s.duplicates,'duplicate side effect'),`${s.unresolved} unresolved`];
-  const refusals = [['blocked',w.blocked],['rejected',w.rejected],['expired',w.expired],['verification unavailable',w.verificationUnavailable],['state uncertain',w.uncertain]]
+  const refusals = [['corrected before sending',w.corrected],['blocked',w.blocked],['rejected',w.rejected],['expired',w.expired],['verification unavailable',w.verificationUnavailable],['state uncertain',w.uncertain]]
     .filter(([,n]) => n > 0).map(([label,n]) => `${n} ${label}`);
-  return refusals.length ? `${parts.join(' · ')} · ${refusals.join(', ')}` : parts.join(' · ');
+  const healing = [];
+  if (inc.total > 0) healing.push(inc.total === 1 && inc.recovered === 1 ? '1 incident, recovered' : `${plural(inc.total,'incident')}, ${inc.recovered || 0} recovered`);
+  if (w.inherited > 0) healing.push(`${w.inherited} inherited`);
+  if (s.recoveries > 0) healing.push(`${s.recoveries} recoveries`);
+  const tail = [...refusals,...healing];
+  return tail.length ? `${parts.join(' · ')} · ${tail.join(', ')}` : parts.join(' · ');
 };
+// The goal text that selects the scripted recovery run below, instead of the default happy-path script.
+const RECOVERY_GOAL = 'Retry the paused HubSpot sync safely and finish confirming the cancellation.';
 
 // A scripted runtime standing in for lib/agent/index.mjs's AgentRuntime: it speaks the same op surface server.mjs calls
 // (health, create, get, list, watch, answer, approve, reject, cancel, stopAll) and builds every run through the real
@@ -75,6 +84,72 @@ function createFakeRuntime() {
     notify(e);
   }
 
+  // Self healing (docs/AGENT_SELF_HEALING.md): a HubSpot write fails, the runtime checks the Stripe refund it already
+  // made before touching anything else, retries HubSpot once, and verifies it — the rows and kinds are the ones named
+  // in the brief. The run ends partial (the confirmation email is left undone on purpose) so Continue has something to
+  // do. Two incidents and one open HubSpot breaker are recorded as fixture evidence for the Diagnostics panel and the
+  // health/breaker line, independent of which fault the visible timeline shows.
+  const hhmm = d => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  async function scriptRecovery(e) {
+    appendEvent(e.run,{kind:'model',status:'started',label:'Understanding request',detail:'Reading the goal and choosing the first tool.'});notify(e);await wait(40);if(e.cancelled) return;
+    transition(e.run,'executing','Starting the refund.');
+    const refund = planEffect(e.run,{tool:'stripe.refund_payment',app:'stripe',opKey:'refund:pi_recover'});
+    appendEvent(e.run,{kind:'write',app:'stripe',status:'ok',label:'Stripe refund created',detail:'Refund re_recover for $120.00.',effectId:refund.effectId,evidence:{refundId:'re_recover'}});
+    updateEffect(e.run,refund.effectId,{status:'executed',attempts:1,receipt:{id:'re_recover',at:new Date().toISOString(),raw:{}}});notify(e);await wait(40);if(e.cancelled) return;
+    appendEvent(e.run,{kind:'verify',app:'stripe',status:'verified',label:'Stripe refund verified',detail:'Refund status succeeded.',effectId:refund.effectId,evidence:{refundId:'re_recover',status:'succeeded'}});
+    updateEffect(e.run,refund.effectId,{status:'verified',verification:{at:new Date().toISOString(),verified:true,detail:'Refund status succeeded.'}});notify(e);await wait(40);if(e.cancelled) return;
+
+    const hubspot = planEffect(e.run,{tool:'hubspot.update_customer',app:'hubspot',opKey:'update:contact_recover'});
+    appendEvent(e.run,{kind:'write',app:'hubspot',status:'failed',label:'HubSpot update failed',detail:'HubSpot returned a server error before sending.',effectId:hubspot.effectId});
+    updateEffect(e.run,hubspot.effectId,{status:'failed',attempts:1,error:{code:'SERVER',message:'HubSpot returned a server error.'}});notify(e);await wait(40);if(e.cancelled) return;
+
+    transition(e.run,'recovering','Recovering from a HubSpot failure.');
+    // Labels and kinds copied from effects.mjs's own checkingLabel()/sweepPrior() (docs/AGENT_SELF_HEALING.md §7) so the
+    // screen is verified against the wording and event kind production actually emits.
+    appendEvent(e.run,{kind:'recovery',status:'started',app:'hubspot',label:'Checking whether HubSpot already applied the update',detail:'A read proved nothing was written.'});notify(e);await wait(40);if(e.cancelled) return;
+    appendEvent(e.run,{kind:'recovery',status:'verified',app:'stripe',label:'Previous Stripe refund verified',detail:'Refund re_recover already succeeded; nothing will be repeated.',effectId:refund.effectId});notify(e);await wait(40);if(e.cancelled) return;
+    appendEvent(e.run,{kind:'recovery',status:'started',app:'hubspot',label:'Retrying HubSpot safely',detail:'Retrying the same update once.'});notify(e);await wait(40);if(e.cancelled) return;
+
+    updateEffect(e.run,hubspot.effectId,{status:'executed',attempts:2,receipt:{id:'contact_recover',at:new Date().toISOString(),raw:{}}});
+    appendEvent(e.run,{kind:'verify',status:'verified',app:'hubspot',label:'HubSpot update verified',detail:'Read back matches.',effectId:hubspot.effectId,evidence:{property:'hs_lead_status',value:'Cancelled'}});
+    updateEffect(e.run,hubspot.effectId,{status:'verified',verification:{at:new Date().toISOString(),verified:true,detail:'Read back matches.'}});notify(e);await wait(40);if(e.cancelled) return;
+    appendEvent(e.run,{kind:'recovery',status:'verified',app:'hubspot',label:'Recovered',detail:'HubSpot update verified after 2 attempts; nothing was repeated.',effectId:hubspot.effectId});notify(e);await wait(40);if(e.cancelled) return;
+
+    const at = new Date().toISOString();
+    e.run.incidents.push(
+      {incidentId:'inc_recover1',runId:e.run.runId,at,updatedAt:at,integration:'hubspot',tool:'hubspot.update_customer',operation:'update:contact_recover',phase:'execute',
+        failureClass:'transient_provider',family:'hubspot:transient_provider:hubspot.update_customer',severity:'warn',providerStatus:500,attemptNumber:1,
+        providerOperationId:null,dashclawActionId:null,effectId:hubspot.effectId,knownState:'verified',uncertainState:false,recoveryAttempted:true,
+        recoveryStrategy:'retry',recoveryResult:'recovered',verificationResult:'verified',
+        sanitizedEvidence:{code:'SERVER',message:'HubSpot returned a server error before sending.',ids:{}},finalDisposition:'recovered'},
+      {incidentId:'inc_recover2',runId:e.run.runId,at,updatedAt:at,integration:'hubspot',tool:'hubspot.update_customer',operation:'update:contact_recover',phase:'execute',
+        failureClass:'authentication_expired',family:'hubspot:authentication_expired:hubspot.update_customer',severity:'high',providerStatus:401,attemptNumber:1,
+        providerOperationId:null,dashclawActionId:null,effectId:null,knownState:'n/a',uncertainState:false,recoveryAttempted:false,
+        recoveryStrategy:'fail_closed',recoveryResult:'failed_closed',verificationResult:'n/a',
+        sanitizedEvidence:{code:'AUTH',message:'HubSpot token expired mid-run.',ids:{}},finalDisposition:'failed'}
+    );
+    const until = new Date(Date.now()+600000);
+    breaker = {key:'hubspot:authentication_expired',integration:'hubspot',failureClass:'authentication_expired',state:'open',failures:2,
+      openedAt:new Date().toISOString(),until:until.toISOString(),reason:`HubSpot paused: 2 authentication failures in 10 min · clears at ${hhmm(until)}`};
+
+    // 'recovering' allows 'partial' directly (lib/agent/run.mjs ALLOWED); the confirmation email is left undone.
+    e.run.finalMessage = 'Refunded and updated HubSpot after a retry, but could not send the confirmation email.';
+    finish(e.run,'partial','A write needed recovery, and the run finished with something left.');
+    notify(e);
+  }
+
+  // Self healing (docs/AGENT_SELF_HEALING.md §6): Continue creates a child run carrying the parent's lineage; its
+  // first timeline row is the runtime's own announcement, before anything else.
+  async function continueChild(child,e,parentRunId,lineage) {
+    const inheritedVerified = lineage.effects.filter(f => f.status === 'verified' || f.status === 'executed').length;
+    const inheritedUncertain = lineage.effects.filter(f => f.status === 'uncertain').length;
+    appendEvent(child,{kind:'model',status:'started',label:`Continuing run ${parentRunId}`,
+      detail:`${inheritedVerified} write(s) already verified, ${inheritedUncertain} to reconcile.`});
+    transition(child,'executing','Reviewing what is left.');
+    notify(e);
+  }
+
+  let breaker = null;
   return {
     createCalls,cancelCalls,
     async health() {
@@ -84,10 +159,28 @@ function createFakeRuntime() {
         hubspot:{configured:true,ok:false,detail:'Token expired. Reconnect in HubSpot.'},
         gmail:{configured:false,ok:false,detail:'GMAIL_REFRESH_TOKEN is not set.'},
         dashclaw:{configured:true,ok:true,detail:'6 policies installed.'}
-      },policies:['refunds need a human','hold when the agent is unsure'],ready:true};
+      },policies:['refunds need a human','hold when the agent is unsure'],ready:true,breakers:breaker?[breaker]:[]};
     },
     async list() { return [...entries.values()].map(e => ({runId:e.run.runId,goal:e.run.goal,status:e.run.status,createdAt:e.run.createdAt})).sort((a,b) => b.createdAt.localeCompare(a.createdAt)); },
     async get(runId) { return snapshot(entry(runId).run); },
+    async diagnostics({runId}) {
+      const run = runId ? entries.get(runId)?.run : null;
+      return {runId:runId || null,incidents:run ? run.incidents : [],summary:null,breakers:breaker?[breaker]:[],
+        resume:run?.resume || null,lineage:run?.lineage?{rootRunId:run.lineage.rootRunId,parentRunId:run.lineage.parentRunId,chain:run.lineage.chain}:null};
+    },
+    async continueRun(parentRunId,{model,effort,windowTitle}) {
+      const parentEntry = entry(parentRunId);
+      if ([...entries.values()].some(e => !TERMINAL.has(e.run.status))) throw new AppError('A run is already in progress. Stop it or wait for it to finish.',409,'RUN_ACTIVE');
+      const lineage = lineageFor(parentEntry.run);
+      const child = createRun({goal:parentEntry.run.goal,model:model || parentEntry.run.model,effort:effort || parentEntry.run.effort,
+        windowTitle:windowTitle ?? parentEntry.run.context.windowTitle,lineage});
+      for (const inherited of lineage.effects) child.effects.push({...JSON.parse(JSON.stringify(inherited)),inheritedFrom:{runId:inherited.runId},reconciliations:[],attempts:1});
+      transition(child,'planning','Reading the goal.');
+      const e = {run:child,watchers:new Set(),cancelled:false};
+      entries.set(child.runId,e);
+      await continueChild(child,e,parentRunId,lineage);
+      return snapshot(child);
+    },
     async create({goal,model,effort,windowTitle}) {
       if ([...entries.values()].some(e => !TERMINAL.has(e.run.status))) throw new AppError('A run is already in progress. Stop it or wait for it to finish.',409,'RUN_ACTIVE');
       createCalls.push({goal,model,effort,windowTitle});
@@ -95,7 +188,7 @@ function createFakeRuntime() {
       transition(run,'planning','Reading the goal.');
       const e = {run,watchers:new Set(),cancelled:false};
       entries.set(run.runId,e);
-      script(e).catch(() => {});
+      (goal === RECOVERY_GOAL ? scriptRecovery(e) : script(e)).catch(() => {});
       return snapshot(run);
     },
     watch(runId,onSnapshot) {
@@ -233,6 +326,9 @@ try {
   assert.match(await page.locator('#agent-final').innerText(),/The agent said[\s\S]*Refunded Acme \$485\.00/);count++;
   await page.locator('#companion').screenshot({path:'.artifacts/agent-summary.png'});
 
+  // Self healing (docs/AGENT_SELF_HEALING.md §8): a completed run never shows Continue.
+  assert.equal(await page.locator('#agent-continue').isVisible(),false,'a completed run has nothing to continue');count++;
+
   // A second run that is rejected ends blocked, with the rejection visible and the refusal counted on the summary line.
   await page.locator('#agent-start').waitFor({state:'visible'});
   await page.locator('#agent-goal').fill('Resolve a second, unrelated cancellation.');
@@ -262,11 +358,78 @@ try {
   await page.locator('#companion-settings').click();await page.locator('#agent-open').click();await page.locator('#agent-run').waitFor({state:'visible'});
   assert.match(await page.locator('#agent-summary-line').innerText(),/apps ·/);count++;
 
+  // Self healing (docs/AGENT_SELF_HEALING.md §8): a HubSpot write fails, recovers on a retry after checking the
+  // Stripe refund already made, and the run ends partial so Continue has something to do.
+  await page.locator('#agent-start').waitFor({state:'visible'});
+  await page.locator('#agent-goal').fill(RECOVERY_GOAL);
+  await page.locator('#agent-start-button').click();await page.locator('#agent-run').waitFor({state:'visible'});
+  await page.waitForFunction(() => document.getElementById('agent-timeline').textContent.includes('Checking whether HubSpot already applied the update'));
+  // Assert the state before capturing, so a slow screenshot on a busy box can never land after the run has already
+  // gone terminal and silently show the summary block instead of the live recovery state.
+  await page.waitForFunction(() => document.getElementById('agent-status').textContent.trim().toLowerCase() === 'recovering');
+  await page.locator('#companion').screenshot({path:'.artifacts/agent-recovering.png'});
+  await page.waitForFunction(() => document.getElementById('agent-status').textContent.trim() === 'partial');
+  const recoveryRunId = (await runtime.list())[0].runId;
+  const recoveryRun = await runtime.get(recoveryRunId);
+
+  // The Recovered row carries the verified glyph (the accent colour), like any other verified row.
+  const recoveredRow = page.locator('#agent-timeline .agent-row-item',{hasText:'Recovered'});
+  assert.equal(await recoveredRow.locator('.agent-glyph-verified').count(),1,'the Recovered row gets the verified glyph');count++;
+
+  // The breaker line and the matching amber HubSpot dot, both from health().breakers, refreshed after this terminal run.
+  await page.waitForFunction(() => document.getElementById('agent-app-hubspot').getAttribute('title')?.includes('HubSpot paused'));
+  assert.equal(await page.locator('#agent-app-hubspot').getAttribute('class'),'agent-app warn');
+  const breakerLineText = await page.locator('#agent-breakers').innerText();
+  assert.match(breakerLineText,/HubSpot paused: 2 authentication failures in 10 min · clears at \d{2}:\d{2}/);count++;
+
+  // The summary line carries the incident and recovery counts, matching run.summary exactly.
+  assert.equal(await page.locator('#agent-summary-line').innerText(),summaryLine(recoveryRun.summary));
+  assert.match(await page.locator('#agent-summary-line').innerText(),/2 incidents, 1 recovered/);
+  assert.match(await page.locator('#agent-summary-line').innerText(),/1 recoveries/);count++;
+
+  // Diagnostics is a button (never a <details>), reveals the incident and breaker rows on op diagnostics, and toggles aria-expanded.
+  assert.equal(await page.locator('#agent-diagnostics-toggle').getAttribute('aria-expanded'),'false');
+  assert.equal(await page.locator('#agent-diagnostics').isVisible(),false);
+  await page.locator('#agent-diagnostics-toggle').click();
+  await page.waitForFunction(() => document.getElementById('agent-diagnostics-toggle').getAttribute('aria-expanded') === 'true');
+  assert.equal(await page.locator('#agent-diagnostics').isVisible(),true);
+  const incidentRows = await page.locator('#agent-diagnostics-incidents li').allInnerTexts();
+  assert.equal(incidentRows.length,2);
+  assert.match(incidentRows.join('\n'),/transient provider · hubspot · hubspot\.update_customer · retry · recovered · recovered/);
+  assert.match(incidentRows.join('\n'),/authentication expired · hubspot · hubspot\.update_customer · fail closed · failed closed · failed/);
+  const breakerRows = await page.locator('#agent-diagnostics-breakers li').allInnerTexts();
+  assert.equal(breakerRows.length,1);
+  assert.match(breakerRows[0],/hubspot authentication expired · open · 2 failures · until \d{2}:\d{2}/);
+  assert.equal(await page.locator('#agent-mode details').count(),0,'Diagnostics is a button, still no details element');count++;
+  await page.locator('#companion').screenshot({path:'.artifacts/agent-diagnostics.png'});
+  await page.locator('#agent-diagnostics-toggle').click();
+  await page.waitForFunction(() => document.getElementById('agent-diagnostics-toggle').getAttribute('aria-expanded') === 'false');
+  assert.equal(await page.locator('#agent-diagnostics').isVisible(),false,'Diagnostics closes again');count++;
+
+  // Continue is present on the partial run; pressing it creates a child run carrying lineage, whose first row is the
+  // runtime's own "Continuing run" announcement, and the child's head names the parent it continues.
+  assert.equal(await page.locator('#agent-continue').isVisible(),true,'a partial run has something to continue');
+  await page.locator('#agent-continue').click();
+  await page.waitForFunction(() => document.getElementById('agent-timeline').textContent.includes('Continuing run'));
+  const firstRowText = await page.locator('#agent-timeline .agent-row-item').first().innerText();
+  assert.match(firstRowText,/^Continuing run /);
+  assert.match(await page.locator('#agent-lineage').innerText(),new RegExp(`^Continues run ${recoveryRunId}$`));
+  assert.equal(await page.locator('#agent-lineage').isVisible(),true);count++;
+  await page.locator('#companion').screenshot({path:'.artifacts/agent-continue.png'});
+
+  // No new element introduced for self healing drops under the 12px type floor (DESIGN.md). Assert the measured count
+  // first, so a selector that matches nothing (an empty list, an element removed from the DOM) cannot pass silently.
+  const measuredFonts = await page.evaluate(() => [...document.querySelectorAll(
+    '#agent-breakers li,#agent-lineage,#agent-diagnostics-toggle,#agent-continue,#agent-diagnostics-incidents li,#agent-diagnostics-breakers li'
+  )].map(el => parseFloat(getComputedStyle(el).fontSize)));
+  assert.ok(measuredFonts.length>=6,`expected at least 6 self-healing elements measured, got ${measuredFonts.length}`);
+  assert.deepEqual(measuredFonts.filter(px => px < 12),[],'every self-healing element stays at or above the 12px floor');count++;
+
   // Mobile width has no horizontal overflow.
   await page.setViewportSize({width:390,height:844});
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   await page.locator('#companion').screenshot({path:'.artifacts/agent-mobile.png'});count++;
 
   assert.deepEqual(errors,[]);count++;
-  console.log(`PASS: ${count} Agent mode UI checks; Set it up from Settings, five health indicators, the model line, an empty-goal refusal, Start with consent, streamed timeline rows, the DashClaw approval card with no tick and no details, source evidence refs and a Slack quote read as data, a Decide by countdown, Details revealing evidence, Approve to a summary matching run.summary with the runtime's closing line kept apart from the model's final words, Reject to blocked with its refusal counted on the summary line, Stop disabling itself immediately and the terminal state arriving on the stream, Back and Open keeping the run, mobile overflow and browser errors. ${runtime.createCalls.length} synthetic runs, ${runtime.cancelCalls.length} synthetic cancels, no model charges.`);
+  console.log(`PASS: ${count} Agent mode UI checks; Set it up from Settings, five health indicators, the model line, an empty-goal refusal, Start with consent, streamed timeline rows, the DashClaw approval card with no tick and no details, source evidence refs and a Slack quote read as data, a Decide by countdown, Details revealing evidence, Approve to a summary matching run.summary with the runtime's closing line kept apart from the model's final words, a completed run hiding Continue, Reject to blocked with its refusal counted on the summary line, Stop disabling itself immediately and the terminal state arriving on the stream, Back and Open keeping the run, a HubSpot recovery ending partial with the Recovered row's verified glyph, a breaker line and amber HubSpot dot from health(), the summary line's incident and recovery counts, Diagnostics as a toggling button revealing incident and breaker rows, Continue creating a lineaged child run whose first row announces it, mobile overflow and browser errors. ${runtime.createCalls.length} synthetic runs, ${runtime.cancelCalls.length} synthetic cancels, no model charges.`);
 } finally { await browser.close();await new Promise(r => app.close(r)); }
