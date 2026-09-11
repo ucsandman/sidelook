@@ -10,7 +10,7 @@ import {randomBytes} from 'node:crypto';
 import {mkdtemp,readFile,readdir,unlink} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
 
 const ENV_ALLOWLIST=['PATH','SystemRoot','TEMP','TMP','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','ComSpec'];
 const EMPTY_INVARIANTS=()=>({unclaimedWrites:0,duplicateEffects:0,incorrectSuccessClaims:0,unheldFinancialWrites:0,secretLeaks:0,injectionAuthorized:0});
@@ -27,8 +27,9 @@ function buildChildEnv(agentDataDir){
 
 // The runner is injectable so tests can supply canned {status, stdout, stderr} without spawning anything. The default
 // spawns real `node` processes with cwd=root and the allowlisted environment above.
-async function defaultRunner({root,set,out,timeoutMs,env}){
-  const jsonPath=join(out,`${set}.json`);
+async function defaultRunner({root,set,out,timeoutMs,env,regressionsDir}){
+  // The child runs with cwd=root (a worktree); every path handed to it is absolute so its report lands where this process reads it.
+  const jsonPath=resolve(out,`${set}.json`);
   let args;
   if(set==='tests'){
     const files=(await readdir(join(root,'tests')).catch(() => [])).filter(f=>f.endsWith('.test.mjs')).sort();
@@ -36,7 +37,8 @@ async function defaultRunner({root,set,out,timeoutMs,env}){
   }else if(set==='eval'){
     args=['eval/run.mjs','--json',jsonPath];
   }else if(set==='dev' || set==='holdout'){
-    args=['agent-learning/regress.mjs','--set',set,'--json',jsonPath];
+    // The corpus is the loop's own, never the tree's: a worktree checked out before this run's new regression files still runs them.
+    args=['agent-learning/regress.mjs','--set',set,'--json',jsonPath,...(regressionsDir?['--regressions',resolve(regressionsDir)]:[])];
   }else{
     throw Object.assign(new Error(`Unknown evaluation set "${set}".`),{code:'INVALID_SET'});
   }
@@ -101,9 +103,9 @@ async function runEvalSet({root,out,timeoutMs,runner,env}){
   };
 }
 
-async function runRegressionSet({root,set,out,timeoutMs,runner,env}){
+async function runRegressionSet({root,set,out,timeoutMs,runner,env,regressionsDir}){
   await clearStaleReport(out,set);
-  const raw=await runner({root,set,out,timeoutMs,env});
+  const raw=await runner({root,set,out,timeoutMs,env,regressionsDir});
   if(raw.status!==0){
     if(MODULE_MISSING.test(raw.stderr || '') && /regress\.mjs/.test(raw.stderr || '')) return {passed:0,total:0,missing:true,byId:{},invariants:EMPTY_INVARIANTS(),ok:false};
     const report=await readJson(raw.jsonPath);
@@ -158,10 +160,10 @@ function computeSafety({eval:evalSet,dev,holdout}){
 }
 
 // evaluateTree({root, sets, learnRunId, candidateId, revision, timeoutMs, runner, out}) -> EvaluationRecord (§8).
-export async function evaluateTree({root,sets=['tests','eval','dev','holdout'],learnRunId,candidateId,revision,timeoutMs=600000,runner=defaultRunner,out}={}){
+export async function evaluateTree({root,sets=['tests','eval','dev','holdout'],learnRunId,candidateId,revision,timeoutMs=600000,runner=defaultRunner,out,regressionsDir=null}={}){
   if(!root) throw Object.assign(new Error('evaluateTree requires root.'),{code:'INVALID_INPUT'});
   const startedAt=Date.now();
-  const outDir=out || await mkdtemp(join(tmpdir(),'sidelook-agent-learning-eval-'));
+  const outDir=resolve(out || await mkdtemp(join(tmpdir(),'sidelook-agent-learning-eval-')));
   const agentDataDir=await mkdtemp(join(tmpdir(),'sidelook-agent-learning-data-'));
   const env=buildChildEnv(agentDataDir);
 
@@ -172,8 +174,8 @@ export async function evaluateTree({root,sets=['tests','eval','dev','holdout'],l
   if(sets.includes('tests')) results.tests=await runTestsSet({root,out:outDir,timeoutMs,runner,env});
   else results.tests={pass:0,fail:0,skipped:0,ok:null,ran:false,failing:[]};
   results.eval=sets.includes('eval') ? await runEvalSet({root,out:outDir,timeoutMs,runner,env}) : {scenariosPassed:0,scenariosTotal:0,byScenario:{},metrics:{},invariants:EMPTY_INVARIANTS(),ok:false};
-  results.dev=sets.includes('dev') ? await runRegressionSet({root,set:'dev',out:outDir,timeoutMs,runner,env}) : {passed:0,total:0,byId:{},invariants:EMPTY_INVARIANTS(),ok:false};
-  results.holdout=sets.includes('holdout') ? await runRegressionSet({root,set:'holdout',out:outDir,timeoutMs,runner,env}) : {passed:0,total:0,byId:{},invariants:EMPTY_INVARIANTS(),ok:false};
+  results.dev=sets.includes('dev') ? await runRegressionSet({root,set:'dev',out:outDir,timeoutMs,runner,env,regressionsDir}) : {passed:0,total:0,byId:{},invariants:EMPTY_INVARIANTS(),ok:false};
+  results.holdout=sets.includes('holdout') ? await runRegressionSet({root,set:'holdout',out:outDir,timeoutMs,runner,env,regressionsDir}) : {passed:0,total:0,byId:{},invariants:EMPTY_INVARIANTS(),ok:false};
 
   const metrics=deriveMetrics(results);
   const safety=computeSafety(results);

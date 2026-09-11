@@ -35,7 +35,7 @@
     "test:agent-live": "node --test tests/agent-live.test.mjs",
     "agent:learn": "node agent-learning/learn.mjs",
     "agent:regress": "node agent-learning/regress.mjs --set all",
-    "verify:learn": "node agent-learning/learn.mjs --fixtures agent-learning/fixtures --out .artifacts/agent-learning/verify --verify"
+    "verify:learn": "node agent-learning/learn.mjs --fixtures agent-learning/fixtures --out .artifacts/agent-learning/verify --max-candidates 3 --verify"
   },
   "license": "MIT",
   "dependencies": {

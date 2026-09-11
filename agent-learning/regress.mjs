@@ -34,13 +34,15 @@ function validateScenario(file,scenario){
   for(const optional of ['fixtures','faults','dashclaw','model']) if(scenario[optional]!==undefined && typeof scenario[optional]!=='object') throw schemaError(file,optional,'must be an object when present');
 }
 
-// Reads and validates every reg_*.json in agent-learning/regressions/<set>/ (set 'all' reads dev and holdout). Returns
-// scenario objects in the shape eval/run.mjs's runScenarios expects (string ids are fine for the runner).
-export async function loadCorpus({root=DEFAULT_ROOT,set}={}){
+// Reads and validates every reg_*.json in <regressionsDir>/<set>/ (set 'all' reads dev and holdout). Returns scenario
+// objects in the shape eval/run.mjs's runScenarios expects (string ids are fine for the runner). The corpus is loop state,
+// not part of the tree under test: the learning loop passes its own corpus directory so an incumbent or candidate worktree
+// (checked out at a revision that predates this run's new regression files) is measured against the same cases.
+export async function loadCorpus({root=DEFAULT_ROOT,set,regressionsDir=null}={}){
   const sets=set==='all' ? ['dev','holdout'] : [set];
   const scenarios=[];
   for(const oneSet of sets){
-    const dir=join(root,'agent-learning','regressions',oneSet);
+    const dir=join(regressionsDir || join(root,'agent-learning','regressions'),oneSet);
     const files=(await readdir(dir).catch(() => [])).filter(f=>/^reg_.*\.json$/.test(f)).sort();
     for(const file of files){
       const path=join(dir,file);
@@ -55,11 +57,12 @@ export async function loadCorpus({root=DEFAULT_ROOT,set}={}){
 }
 
 function parseArgs(argv){
-  const args={set:null,root:DEFAULT_ROOT,json:null};
+  const args={set:null,root:DEFAULT_ROOT,json:null,regressions:null};
   for(let i=0;i<argv.length;i++){
     if(argv[i]==='--set') args.set=argv[++i];
     else if(argv[i]==='--root') args.root=argv[++i];
     else if(argv[i]==='--json') args.json=argv[++i];
+    else if(argv[i]==='--regressions') args.regressions=argv[++i];
   }
   return args;
 }
@@ -67,11 +70,11 @@ function parseArgs(argv){
 async function main(){
   const args=parseArgs(process.argv.slice(2));
   if(args.set!=='dev' && args.set!=='holdout' && args.set!=='all'){
-    console.error('Usage: node agent-learning/regress.mjs --set dev|holdout|all [--root <tree>] [--json <path>]');
+    console.error('Usage: node agent-learning/regress.mjs --set dev|holdout|all [--root <tree>] [--regressions <corpus dir>] [--json <path>]');
     process.exitCode=1;
     return;
   }
-  const scenarios=await loadCorpus({root:args.root,set:args.set});
+  const scenarios=await loadCorpus({root:args.root,set:args.set,regressionsDir:args.regressions?resolve(args.regressions):null});
   const report={generatedAt:new Date().toISOString(),set:args.set,scenarios:[],metrics:null};
   if(!scenarios.length){
     console.log(`0 regression scenarios in ${args.set}.`);

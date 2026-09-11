@@ -4,10 +4,10 @@
 // lives in agent-learning/lib/*; this file wires them together, resolves the model seam (real, fixture or none),
 // and owns the parts the contract leaves to "the caller": learnRunId, the CLI, target resolution for compare(),
 // the candidateId -> hypothesisKey translation the fixture review needs, and cleanup.
-import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync as gitExec } from 'node:child_process';
 import { randomBytes as randomBytesFn, createHash } from 'node:crypto';
@@ -249,6 +249,20 @@ export async function runLoop(options = {}) {
   const durableDir = dryRun ? null : (options.durableDir ?? (fixturesDir ? outDir : join(root, 'agent-learning')));
   const memoryPath = options.memoryPath || (fixturesDir ? join(outDir, 'learning-memory.json') : join(root, 'agent-learning', 'memory', 'learning-memory.json'));
   const regressionsDir = options.regressionsDir || (fixturesDir ? join(outDir, 'regressions') : join(root, 'agent-learning', 'regressions'));
+  // A fixtures run starts clean: whatever an earlier run left under its out dir (memory with rejected strategies, a corpus,
+  // records) would change what this run proposes, so the out dir is emptied first, then seeded with a fresh copy of the
+  // committed corpus so the starter holdout cases take part in the proof (Scenario C must pass its family's holdout case).
+  // Nothing the run writes reaches the committed files.
+  if (fixturesDir && !options.regressionsDir && !dryRun) {
+    // Only a directory under the repository's own .artifacts/ is ever emptied; any other --out is left as found.
+    const artifacts = resolve(root, '.artifacts');
+    if (resolve(outDir).toLowerCase().startsWith((artifacts + sep).toLowerCase())) await rm(outDir, { recursive: true, force: true });
+    const committed = join(root, 'agent-learning', 'regressions');
+    for (const set of ['dev', 'holdout']) {
+      await mkdir(join(regressionsDir, set), { recursive: true });
+      for (const f of (await readdir(join(committed, set)).catch(() => [])).filter(f => f.endsWith('.json'))) await writeFile(join(regressionsDir, set, f), await readFile(join(committed, set, f), 'utf8'), 'utf8');
+    }
+  }
   const worktreesDir = options.worktreesDir || join(root, '.worktrees');
   const print = options.print === undefined ? (msg => console.log(msg)) : options.print;
   const evaluateTreeFn = options.evaluateTree || realEvaluateTree;
@@ -267,7 +281,20 @@ export async function runLoop(options = {}) {
   // Step 1: freeze. Written to <out>/incumbent.json (docs/AGENT_LEARNING_LOOP.md section 2 step 1); incumbentHash is
   // sha256 of those exact bytes (section 3), and candidates.mjs's createCandidate reads incumbent.hash/regionHashes
   // to stamp every candidate record and diff protected regions against — without this, both were always undefined.
-  const incumbent = await freezeIncumbent({ root, now: () => now().toISOString() });
+  // The incumbent is HEAD, frozen from a detached checkout of exactly those bytes: hashes taken from the live working tree
+  // would include whatever is being edited there. The checkout stays for the baseline evaluation (step 4) and is removed after.
+  // A dry run freezes from the working tree (it creates nothing) and says so.
+  const checkout = dryRun ? { path: root, stub: true } : await checkoutIncumbentFn({ root, revision: gitExec('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), worktreesDir, label: 'incumbent' });
+  let incumbent;
+  try {
+    incumbent = await freezeIncumbent({ root: checkout.path, now: () => now().toISOString() });
+  } catch (error) {
+    if (!checkout.stub) { try { removeWorktreeFn({ root, path: checkout.path }); } catch { /* best effort */ } }
+    throw error;
+  }
+  // `dirty` from a clean checkout is always false; what a person wants to know is whether the working tree they ran from differs from HEAD.
+  incumbent.workingTreeDirty = gitExec('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim().length > 0;
+  incumbent.frozenFrom = checkout.stub ? 'working tree (dry run)' : 'detached checkout';
   const incumbentJson = JSON.stringify(incumbent, null, 2);
   const incumbentHash = createHash('sha256').update(incumbentJson).digest('hex');
   const incumbentForCandidates = { ...incumbent, hash: incumbentHash, regionHashes: incumbent.protected };
@@ -275,7 +302,7 @@ export async function runLoop(options = {}) {
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, 'incumbent.json'), incumbentJson, 'utf8');
   }
-  step(1, 'freeze', `revision ${incumbent.revision.slice(0, 12)}${incumbent.dirty ? ' (dirty)' : ''}`);
+  step(1, 'freeze', `revision ${incumbent.revision.slice(0, 12)}${incumbent.workingTreeDirty ? ' (working tree dirty; the incumbent is HEAD)' : ''}`);
 
   // Step 2: intake. A --fixtures run never trusts the real committed memory's lastIntakeAt: the fixture data is
   // dated once and fixed, so gating it behind real state silently empties it the moment a real run advances that
@@ -318,11 +345,10 @@ export async function runLoop(options = {}) {
   // Step 4: baseline. Dry-run stops after reduce (docs/AGENT_LEARNING_LOOP.md section 2's dry-run list).
   let incumbentEval = null;
   if (!dryRun) {
-    // The incumbent is evaluated on its frozen bytes: a detached worktree at incumbent.revision, removed once measured.
+    // The incumbent is evaluated on its frozen bytes: the same detached checkout step 1 hashed, removed once measured.
     // A dirty working tree is reported, never measured; what it holds is not part of the incumbent.
-    const checkout = await checkoutIncumbentFn({ root, revision: incumbent.revision, worktreesDir, label: 'incumbent' });
     try {
-      incumbentEval = await evaluateTreeFn({ root: checkout.path, sets: ['tests', 'eval', 'dev', 'holdout'], learnRunId, candidateId: 'incumbent', revision: incumbent.revision, out: join(outDir, 'incumbent') });
+      incumbentEval = await evaluateTreeFn({ root: checkout.path, sets: ['tests', 'eval', 'dev', 'holdout'], learnRunId, candidateId: 'incumbent', revision: incumbent.revision, out: join(outDir, 'incumbent'), regressionsDir });
     } finally {
       if (!checkout.stub) { try { removeWorktreeFn({ root, path: checkout.path }); } catch (error) { log(print, `step 4 of 13: baseline ... warning: could not remove the incumbent worktree: ${error.message || error}`); } }
     }
@@ -423,7 +449,7 @@ export async function runLoop(options = {}) {
     for (const candidate of candidates) {
       if (candidate.status === 'invalid') continue;
       try {
-        const evalRecord = await evaluateTreeFn({ root: candidate.worktree.path, sets: ['tests', 'eval', 'dev', 'holdout'], learnRunId, candidateId: candidate.candidateId, revision: candidate.worktree.commit, out: join(outDir, candidate.candidateId) });
+        const evalRecord = await evaluateTreeFn({ root: candidate.worktree.path, sets: ['tests', 'eval', 'dev', 'holdout'], learnRunId, candidateId: candidate.candidateId, revision: candidate.worktree.commit, out: join(outDir, candidate.candidateId), regressionsDir });
         evalRecord.parentRevision = candidate.parentRevision;
         evalRecord.governanceTouch = candidate.governanceTouch;
         evaluations.push(evalRecord);

@@ -77,7 +77,10 @@ export const REDUCTION_TABLE = {
   'hubspot:transient_provider:hubspot.update_customer': family => !family.attemptsExhausted ? null : ({
     faults: { 'hubspot.updateContact': { kind: 'failTimes', times: Math.max(TRANSIENT_PROVIDER_MAX_ATTEMPTS, family.maxAttemptNumber || 0) } },
     dashclaw: { approvalScript: 'approve' },
-    expect: { status: 'completed', writes: { duplicate: 0, verified: 3 }, approvals: { decision: 'approved' }, recovered: true, noSuccessClaim: true, state: { refunds: 1 } }
+    // requested:3 is the target: the recovery must happen inside the one governed effect (one DashClaw action, one claim),
+    // not through the model asking for the same update again after the attempts ran out, which adds a fourth effect and a
+    // second action for the same operation. That is the planner inefficiency the incidents recorded.
+    expect: { status: 'completed', writes: { requested: 3, duplicate: 0, verified: 3 }, approvals: { decision: 'approved' }, recovered: true, noSuccessClaim: true, state: { refunds: 1 } }
   }),
   'stripe:response_lost:stripe.refund_payment': () => ({
     faults: { 'stripe.createRefund': 'lostAfterSuccess' },
@@ -140,9 +143,13 @@ export function familyToRegression(family, { learnRunId = null, now = () => new 
 // section 8). A third and later case alternates by the parity of the new case's own fingerprint (the caller passes
 // it in; falls back to the existing-count parity when no fingerprint is given, still deterministic).
 export function assignSet(family, existingCorpus = { dev: [], holdout: [] }, fingerprint = null) {
-  const existing = [...(existingCorpus.dev || []), ...(existingCorpus.holdout || [])].filter(r => r.family === family.key);
-  if (existing.length === 0) return 'dev';
-  if (existing.length === 1) return 'holdout';
+  const inDev = (existingCorpus.dev || []).filter(r => r.family === family.key);
+  const inHoldout = (existingCorpus.holdout || []).filter(r => r.family === family.key);
+  // The generator must always be able to see one case of a family it is asked to fix, and promotion must always have one
+  // it cannot see: whichever set the family still lacks gets the next case, whatever order earlier cases arrived in.
+  if (inDev.length === 0) return 'dev';
+  if (inHoldout.length === 0) return 'holdout';
+  const existing = [...inDev, ...inHoldout];
   const parity = fingerprint
     ? parseInt(sha256(fingerprint).slice(0, 8), 16) % 2
     : existing.length % 2;

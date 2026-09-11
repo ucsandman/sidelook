@@ -10,12 +10,15 @@ import { systemPrompt, PLAN_SCHEMA } from '../../lib/agent/planner.mjs';
 import { loadConfig, describeConfig } from '../../lib/agent/config.mjs';
 
 const sha256 = text => createHash('sha256').update(text).digest('hex');
+// Every hash is over LF text: with core.autocrlf on, a fresh worktree checkout carries CRLF while a file a tool wrote in the
+// main tree carries LF, and the same bytes of code would otherwise hash differently on the two sides of a comparison.
+const eol = text => String(text).replace(/\r\n/g, '\n');
 
 // Missing lib/agent/recovery.mjs, breakers.mjs or resume.mjs (still being written alongside this module) hash as
 // the literal string 'absent', never throw: an incumbent frozen mid-build of the runtime is still a valid,
 // comparable snapshot, just one where that surface has not landed yet.
 function hashFile(path) {
-  try { return sha256(readFileSync(path, 'utf8')); }
+  try { return sha256(eol(readFileSync(path, 'utf8'))); }
   catch (error) { if (error.code === 'ENOENT') return 'absent'; throw error; }
 }
 
@@ -83,7 +86,7 @@ export function protectedRegionHashes(root) {
   for (const file of PROTECTED_FILES) {
     const markers = PROTECTED_MARKERS[file];
     let lines = null;
-    try { lines = readFileSync(join(root, file), 'utf8').split('\n'); }
+    try { lines = eol(readFileSync(join(root, file), 'utf8')).split('\n'); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
     out[file] = {
       regions: markers.map(marker => {
@@ -102,7 +105,7 @@ function corpusHash(dir) {
   try { names = readdirSync(dir).filter(name => name.endsWith('.json')); }
   catch (error) { if (error.code === 'ENOENT') return 'absent'; throw error; }
   const rows = names.map(name => {
-    const text = readFileSync(join(dir, name), 'utf8');
+    const text = eol(readFileSync(join(dir, name), 'utf8'));
     let id = name;
     try { id = JSON.parse(text).id || name; } catch { /* malformed scenario file: fall back to the filename as its id */ }
     return { id, hash: sha256(text) };
