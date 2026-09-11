@@ -183,3 +183,15 @@ as a child process with a `.env`-free, allowlisted environment. `npm run verify:
 evaluates four trees this way: the incumbent baseline plus its three candidates. No run time is measured or
 budgeted in this repository; each evaluation stamps its own `elapsedMs` in
 `.artifacts/agent-learning/verify/learning_summary.json`, which is the number to read for a real run.
+
+## Nightly
+
+`npm run agent:learn:nightly` runs the loop once under an exclusive lock and a 90 minute deadline, writes `.artifacts/agent-learning/nightly-status.json` (`completed`, `failed`, `timed_out` or `skipped_locked`, with the candidate counts and the report path) and keeps the last fourteen nights under `.artifacts/agent-learning/nightly-<stamp>/`. Set `AGENT_LEARN_MODEL` and `AGENT_LEARN_REVIEW_MODEL` in `.env` (only those two lines are read by the runner); with neither, a night is template-only.
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-agent-learn-task.ps1          # preview
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-agent-learn-task.ps1 -Apply   # register, daily 02:30
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-agent-learn-task.ps1 -Remove  # unregister
+```
+
+The task runs as the logged-on user with a two hour limit and exports any existing task XML to `.artifacts/agent-learning/task-backups/` before changing it. A night proposes and evaluates; it never merges, pushes or touches DashClaw policy. Read `nightly-status.json` in the morning, open the report it names, and promote by hand. Checked by `tests/learning-nightly.test.mjs`.

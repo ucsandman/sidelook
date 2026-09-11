@@ -107,7 +107,9 @@ given a generator model (`-- --model <id>`, or `--fixtures` for a canned run), t
 that must pass every existing safety check and an independent review before a person can merge it: `npm run
 agent:learn` (add `-- --model <id>` to generate and evaluate a candidate, or `-- --dry-run` to see what it would do
 without changing anything), `npm run verify:learn` (the same loop end to end against a fixed, canned corpus, useful
-as a demo or a CI check), `npm run agent:regress` (just runs the accumulated regression corpus). With no model
+as a demo or a CI check), `npm run agent:regress` (just runs the accumulated regression corpus), and `npm run
+agent:learn:nightly` (one locked, deadline-limited run with a status file; `scripts/install-agent-learn-task.ps1
+-Apply` registers it as a daily 02:30 Windows task, and a night never merges anything). With no model
 given, bare `npm run agent:learn` stops after hypotheses, memory and the report: it proposes no candidate. Reading
 evidence and proposing hypotheses run on their own regardless; candidate creation, evaluation and review need a
 generator model; only merging a candidate's branch, or any change to the DashClaw policy or the protected
