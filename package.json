@@ -1,6 +1,10 @@
 {
   "name": "sidelook",
   "version": "0.18.0",
+  "description": "A desktop companion for Windows that runs on the ChatGPT or Claude subscription you already pay for, or on a local model in LM Studio or Ollama.",
+  "repository": { "type": "git", "url": "https://github.com/ucsandman/sidelook.git" },
+  "homepage": "https://sidelook.practicalsystems.io",
+  "bugs": "https://github.com/ucsandman/sidelook/issues",
   "private": true,
   "type": "module",
   "engines": {
