@@ -17,6 +17,12 @@ Setup: `docs/HACKATHON_SETUP.md`. Architecture: `docs/HACKATHON_ARCHITECTURE.md`
 
 ## The script (2:00)
 
+Measured live on 2026-09-11 (Claude Code, Haiku 4.5, low effort, real Slack, Stripe test mode, HubSpot, Gmail and
+DashClaw): Demo A took 156 to 174 s from Start to the summary, Demo B 180 s, Demo C 68 s. A model turn takes 10 to
+20 s and a run needs 5 to 12 of them, so the minute marks below are the talk track, not the run time. Start Demo A
+before 0:00 and narrate the rows as they arrive, and run Demo B ahead of time and open it from the run list; Back and
+Open keep a run on screen.
+
 ### 0:00 to 0:20: what this is
 
 Say: "Sidelook usually looks at one window and answers a question about it. Agent mode is different. I give it a

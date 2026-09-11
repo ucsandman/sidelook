@@ -111,3 +111,15 @@ test('buildPrompt surfaces the most recent run error',()=>{
   const body=JSON.parse(buildPrompt(run,{observations:[]}));
   assert.deepEqual(body.lastError,{code:'INVALID_ARGS',message:'paymentId is required.'});
 });
+
+test('buildPrompt carries the operator settings when given, and systemPrompt names StructuredOutput as the only function',()=>{
+  const run=createRun({goal:'g'});
+  const body=JSON.parse(buildPrompt(run,{observations:[],settings:{hubspot:{property:'hs_lead_status',value:'UNQUALIFIED'},gmail:{from:'agent@example.com'}}}));
+  assert.deepEqual(body.settings.hubspot,{property:'hs_lead_status',value:'UNQUALIFIED'});
+  assert.equal('settings' in JSON.parse(buildPrompt(run,{observations:[]})),false,'no settings key without settings');
+  // Live, 2026-09-11: Haiku called catalog names as functions one run in five, and asked the person for the HubSpot value.
+  const system=systemPrompt(registry);
+  assert.match(system,/only function you may call is StructuredOutput/);
+  assert.match(system,/never ask the person for them/);
+  assert.match(system,/status `refused`/);
+});

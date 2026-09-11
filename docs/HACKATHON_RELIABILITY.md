@@ -278,6 +278,13 @@ properties above.
 - **A local refusal read as a final block.** The model passed its own HubSpot value, the runtime refused it before
   anything was sent, and the rules told the model a block is final, so it never tried again. A precondition refusal is
   now `status: refused` with a `next` hint, and the tool descriptions say what to pass.
+- **DashClaw turned the refund hold into a warning after a busy day.** Its interruption budget demotes
+  `require_approval` to `warn`, without human review, once one command shape has asked more than 10 times in 24 hours
+  (`builtin:shape_budget`). By the final Demo A the day's demo and test refunds had crossed it, and a $485.00 test-mode
+  refund ran with no card, because Sidelook treated `warn` as allowed. Two fixes: the effect engine now refuses any
+  refund DashClaw did not hold for a person and closes the action on DashClaw as failed (`REFUND_NOT_HELD`), and the
+  two hold rows are installed `ungrantable`, which every automatic relief in DashClaw respects while a real operator
+  approval still authorizes the claim.
 - **Gmail rewrites the Message-ID for gmail.com senders**, so the send is verified by the id Gmail returns and a lost
   answer is reconciled by the reference line in the body (see Gmail above).
 

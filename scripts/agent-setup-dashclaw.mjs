@@ -9,8 +9,11 @@ const HEADER='x-api-key';
 // short_list: true is what keeps a row interrupting: without it DashClaw's Short List admission demotes the verdict to warn
 // (measured 2026-09-10 on a live org: four rows created without the flag came back as action warn). The org has ten slots.
 export const SIDELOOK_POLICIES=[
-  {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval',short_list:true}},
-  {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval',short_list:true}},
+  // The two holds are `ungrantable`: DashClaw's interruption budget otherwise demotes a hold to `warn` without human review once
+  // one command shape has asked more than 10 times in 24 h (builtin:shape_budget; a $485.00 test refund ran unheld on 2026-09-11).
+  // Ungrantable stops every automatic relief; a real operator approval still authorizes the claim (evaluate.grants.ts).
+  {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval',ungrantable:true,short_list:true}},
+  {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval',ungrantable:true,short_list:true}},
   {name:'sidelook-agent: block over the ceiling',policy_type:'risk_threshold',rules:{threshold:100,action:'block',short_list:true}},
   // content_path/source_path point into the act: DashClaw strips these paths from the decision context it stores, and the
   // execution claim re-evaluates from that stored context plus the act sent with the claim (app/lib/guard/execution.ts).
@@ -21,7 +24,7 @@ export const SIDELOOK_POLICIES=[
 ];
 
 // The verdict fields the server may rewrite on admission. A stored row whose verdict differs from the one sent is not installed.
-const VERDICT_FIELDS=['action','on_violation','escalate_action','enforcement'];
+const VERDICT_FIELDS=['action','on_violation','escalate_action','enforcement','ungrantable'];
 export function verdictDrift(policy,row){
   let stored;try{stored=typeof row?.rules==='string'?JSON.parse(row.rules):(row?.rules || {});}catch{return 'stored rules are not JSON';}
   if(row?.policy_type && row.policy_type!==policy.policy_type) return `stored as ${row.policy_type}`;

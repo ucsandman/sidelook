@@ -14,6 +14,8 @@ import {RunStore} from '../lib/agent/store.mjs';
 import {createHealth} from '../lib/agent/health.mjs';
 import {AgentRuntime} from '../lib/agent/index.mjs';
 import {createRun,transition,planEffect,updateEffect,addApproval,TERMINAL} from '../lib/agent/run.mjs';
+import {finalStatus,summary} from '../lib/agent/run.mjs';
+import {executeWrite} from '../lib/agent/effects.mjs';
 import {createApp} from '../server.mjs';
 
 // The same hackathon policy pack eval/run.mjs starts the fake DashClaw server with (contract section 15): refunds are
@@ -381,3 +383,68 @@ test('HACKATHON_FAIL_HUBSPOT_ONCE recovers within one run: the recovery labels a
   }
   assert.equal(env.providers.state.refunds.length,1);
 });
+
+test('the effect engine marks a corrected runtime refusal superseded once the same tool verifies, and the run completes',async()=>{
+  // Live Demo A, 2026-09-11: hubspot.update_customer with the model's own value was refused, then called with only the
+  // contact id and verified. The refusal must stay on the ledger but not turn a finished run into partial.
+  const fake=await startFakeDashClaw({policy:HACKATHON_POLICY});
+  try{
+    const config=buildConfig(fake.baseUrl);
+    const providers=createFakeProviders({});
+    const governed=createGoverned({config});
+    const run=createRun({goal:GOAL_REFUND,model:'scripted',effort:'low'});
+    run.entities.stripeCustomer={id:'cus_1',email:'dana@acme.com',name:'Acme'};
+    run.entities.hubspotContact={id:'123',email:'dana@acme.com'};
+    transition(run,'planning','Test setup.');transition(run,'executing','Test setup.');
+    const handle={run,deps:{providers,governed,config},signal:new AbortController().signal,emit(){},waitForDecision:()=>new Promise(()=>{}),clearDecision(){}};
+
+    const refused=await executeWrite(handle,'hubspot.update_customer',{contactId:'123',value:'CUSTOMER'});
+    assert.equal(refused.status,'refused');assert.equal(refused.code,'VALUE_NOT_ALLOWED');assert.ok(refused.next,'the model is told it may correct the call');
+    assert.equal(finalStatus(run,{}),'blocked','before the correction the refusal is all there is');
+
+    const verified=await executeWrite(handle,'hubspot.update_customer',{contactId:'123'});
+    assert.equal(verified.status,'verified');
+    assert.equal(run.effects.length,2);
+    assert.equal(run.effects[0].status,'blocked');assert.equal(run.effects[0].superseded,true);
+    assert.equal(finalStatus(run,{}),'completed');
+    assert.deepEqual([summary(run).writes.blocked,summary(run).writes.corrected],[0,1]);
+  }finally{await fake.close();}
+});
+
+test('a refund DashClaw allowed without holding it for a person is refused before the claim, and closed as failed on DashClaw',async()=>{
+  // Live, 2026-09-11: DashClaw's interruption budget turned the refunds hold into `warn` (builtin:shape_budget) and a $485.00
+  // refund ran with no card. The engine must never move money on an unheld verdict.
+  const config=buildConfig('http://127.0.0.1:1');
+  const providers=createFakeProviders({});
+  const outcomes=[],claims=[];
+  const stub=(approvedBy)=>({
+    async policyNames(){return ['sidelook-agent: refunds need a human'];},
+    async record(){return {state:'allowed',actionId:'act_warn',decisionId:'act_gd_warn',decision:'warn',reasons:[],matchedPolicies:['gp_hold','builtin:shape_budget'],riskScore:65,nonFabrication:null,replay:false,actionStatus:'running',approvedBy};},
+    async claim(actionId){claims.push(actionId);throw Object.assign(new Error('stop here'),{code:'CLAIM_REFUSED'});},
+    async outcome(actionId,payload){outcomes.push({actionId,payload});return {ok:true};},
+    actForHttp:({method,url,body})=>({kind:'http',request:{method,url,body_excerpt:body}})
+  });
+  const setup=governed=>{
+    const run=createRun({goal:GOAL_REFUND,model:'scripted',effort:'low'});
+    run.sourceFacts.push({key:'request',value:'Please refund our most recent payment.',label:'request',source:'slack',ref:'C1/1.1'});
+    run.entities.stripeCustomer={id:'cus_1',email:'dana@acme.com',name:'Acme'};
+    run.entities.payment={id:'pi_1',customerId:'cus_1',amountCents:48500,amountRefundedCents:0,currency:'usd'};
+    transition(run,'planning','Test setup.');transition(run,'executing','Test setup.');
+    return {run,deps:{providers,governed,config},signal:new AbortController().signal,emit(){},waitForDecision:()=>new Promise(()=>{}),clearDecision(){}};
+  };
+
+  const unheld=setup(stub(null));
+  const result=await executeWrite(unheld,'stripe.refund_payment',{paymentId:'pi_1'});
+  assert.equal(result.status,'blocked');assert.equal(result.code,'REFUND_NOT_HELD');
+  assert.equal(claims.length,0,'no execution claim for an unheld refund');
+  assert.equal(providers.calls.filter(c=>c.method==='stripe.createRefund').length,0,'Stripe never saw a refund');
+  assert.deepEqual(outcomes.map(o=>[o.actionId,o.payload.status]),[['act_warn','failed']]);
+  assert.match(unheld.run.effects[0].error.message,/builtin:shape_budget/);
+  assert.equal(finalStatus(unheld.run,{}),'blocked');
+
+  // A replay of an action a person already approved carries approved_by and goes on to the claim.
+  const approved=setup(stub('operator'));
+  await executeWrite(approved,'stripe.refund_payment',{paymentId:'pi_1'});
+  assert.equal(claims.length,1,'an approved action reaches the claim');
+});
+

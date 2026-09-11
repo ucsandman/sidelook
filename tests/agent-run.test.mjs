@@ -148,3 +148,23 @@ test('idempotencyKey is deterministic per run/tool/opKey and newId matches the r
   assert.match(newId('run'),/^run_[a-f0-9]{20}$/);
   assert.ok(STATES.includes('completed') && STATES.includes('created'));
 });
+
+test('a runtime refusal the model corrected is superseded by the verified write; a DashClaw block never is',()=>{
+  // Live Demo A, 2026-09-11: the model passed its own HubSpot value, was refused, corrected it, and the write verified.
+  const run=createRun({goal:'g'});
+  const refused=planEffect(run,{tool:'hubspot.update_customer',app:'hubspot',opKey:'refused:VALUE_NOT_ALLOWED:0'});
+  updateEffect(run,refused.effectId,{status:'blocked',superseded:true,policy:{decision:'refused',reasons:['value'],matchedPolicies:['sidelook:precondition'],riskScore:null}});
+  const done=planEffect(run,{tool:'hubspot.update_customer',app:'hubspot',opKey:'update:1:hs_lead_status'});
+  updateEffect(run,done.effectId,{status:'verified'});
+  assert.equal(finalStatus(run,{}),'completed');
+  const s=summary(run);
+  assert.equal(s.writes.blocked,0,'a corrected refusal is not a block');assert.equal(s.writes.corrected,1);
+
+  const blockedRun=createRun({goal:'g'});
+  const dc=planEffect(blockedRun,{tool:'stripe.refund_payment',app:'stripe',opKey:'refund:pi_1'});
+  updateEffect(blockedRun,dc.effectId,{status:'blocked',policy:{decision:'block',reasons:['ceiling'],matchedPolicies:['gp_1'],riskScore:100}});
+  const ok=planEffect(blockedRun,{tool:'hubspot.update_customer',app:'hubspot',opKey:'update:1:hs_lead_status'});
+  updateEffect(blockedRun,ok.effectId,{status:'verified'});
+  assert.equal(finalStatus(blockedRun,{}),'partial');
+  assert.equal(summary(blockedRun).writes.blocked,1);
+});

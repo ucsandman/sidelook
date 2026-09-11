@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {installDashclawPolicies,SIDELOOK_POLICIES} from '../scripts/agent-setup-dashclaw.mjs';
+import {installDashclawPolicies,SIDELOOK_POLICIES,verdictDrift} from '../scripts/agent-setup-dashclaw.mjs';
 import {consentUrl,exchangeCode} from '../scripts/gmail-auth.mjs';
 
 // A minimal Response-like object plus call recording, standing in for the DashClaw HTTP surface.
@@ -148,3 +148,23 @@ test('exchangeCode names the Google error and never invents a refresh token',asy
     return true;
   });
 });
+
+test('the non-fabrication row reads its content and source from the act, which the execution claim re-supplies',()=>{
+  // Live, 2026-09-11: with top-level content paths DashClaw stripped them from the stored context and refused every email claim.
+  const row=SIDELOOK_POLICIES.find(p=>p.policy_type==='non_fabrication');
+  assert.equal(row.rules.content_path,'act.evidence.content');
+  assert.equal(row.rules.source_path,'act.evidence.source_of_truth');
+  assert.equal(row.rules.short_list,true);
+});
+
+test('both holds are ungrantable, and a present hold stored without it is reported as drift',()=>{
+  // Live, 2026-09-11: DashClaw's interruption budget demoted the refunds hold to warn and a refund ran with no card.
+  for(const name of ['sidelook-agent: refunds need a human','sidelook-agent: hold when the agent is unsure']){
+    const policy=SIDELOOK_POLICIES.find(p=>p.name===name);
+    assert.equal(policy.rules.action,'require_approval');assert.equal(policy.rules.ungrantable,true,name);
+    const {ungrantable,...stored}=policy.rules;
+    assert.match(verdictDrift(policy,{policy_type:policy.policy_type,rules:JSON.stringify(stored)}),/ungrantable stored as \(none\), sent true/);
+    assert.equal(verdictDrift(policy,{policy_type:policy.policy_type,rules:JSON.stringify(policy.rules)}),null);
+  }
+});
+

@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {startFakeDashClaw} from '../eval/fake-dashclaw.mjs';
 import {createGoverned,GovernanceUnavailable,ClaimRefused,ClaimUncertain} from '../lib/agent/governed.mjs';
+import {GuardBlockedError} from 'dashclaw';
 
 const AGENT_KEY='sk_test_fake_agent',APPROVER_KEY='sk_test_fake_approver';
 const httpAct=(url='https://api.example.com/v1/widgets',method='POST')=>({kind:'http',request:{method,url}});
@@ -249,4 +250,19 @@ test('health reports the approver role for each key and whether a non-fabricatio
     const member=await governedFor(fake,{approverApiKey:AGENT_KEY}).health();
     assert.equal(member.approverRole,'member');
   }finally{await fake.close();}
+});
+
+test('a blocked record finds the blocked action DashClaw wrote beside the decision, so the ledger page can be opened',async()=>{
+  // The SDK's block error carries only the guard decision; DashClaw's blocked action record is keyed by guard_decision_id.
+  class BlockingClient{constructor(){}async createAction(){throw new GuardBlockedError({decision:'block',decision_id:'act_gd_1',reason:'over the ceiling',matched_policies:['gp_1'],risk_score:100});}}
+  const lookups=[];
+  const fetchImpl=async url=>{lookups.push(url);return {ok:true,status:200,json:async()=>({actions:[{action_id:'act_other',guard_decision_id:'act_gd_0'},{action_id:'act_blocked',guard_decision_id:'act_gd_1'}]})};};
+  const g=createGoverned({config:{dashclaw:{baseUrl:'https://dash.example',apiKey:AGENT_KEY,approverApiKey:APPROVER_KEY,agentId:'sidelook-agent'}},DashClawClass:BlockingClient,fetchImpl});
+  const result=await g.record(effect(9),ctx({riskScore:100}));
+  assert.equal(result.state,'blocked');assert.equal(result.decisionId,'act_gd_1');assert.equal(result.actionId,'act_blocked');
+  assert.match(lookups[0],/\/api\/actions\?status=blocked/);
+
+  const missFetch=async()=>({ok:false,status:500,json:async()=>({})});
+  const miss=await createGoverned({config:{dashclaw:{baseUrl:'https://dash.example',apiKey:AGENT_KEY,agentId:'sidelook-agent'}},DashClawClass:BlockingClient,fetchImpl:missFetch}).record(effect(10),ctx({riskScore:100}));
+  assert.equal(miss.state,'blocked');assert.equal(miss.actionId,null,'a failed lookup leaves the block standing without an id');
 });

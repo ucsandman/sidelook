@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadConfig,describeConfig} from '../lib/agent/config.mjs';
+import {blockEmail,demoEmail} from '../scripts/agent-seed.mjs';
 
 test('defaults: nothing configured, sensible fallback values, no file load attempted',()=>{
   const config=loadConfig({env:{},loadFile:false});
@@ -105,4 +106,12 @@ test('describeConfig() carries only booleans and non-secret settings, never a to
   assert.equal(described.gmail.from,'agent@example.com');
   const unconfigured=describeConfig(loadConfig({env:{},loadFile:false}));
   assert.equal(unconfigured.gmail.from,'','an unconfigured app never surfaces its address either');
+});
+
+test('demo addresses: AGENT_DEMO_EMAIL and AGENT_DEMO_BLOCK_EMAIL are read lowercased; Demo C defaults to an alias of the demo inbox',()=>{
+  const config=loadConfig({env:{AGENT_DEMO_EMAIL:' Wes+Acme@Example.com ',AGENT_DEMO_BLOCK_EMAIL:''},loadFile:false});
+  assert.equal(config.demo.email,'wes+acme@example.com');assert.equal(config.demo.blockEmail,'');
+  assert.equal(blockEmail(config.demo.email,'globex.com'),'wes+globex-com@example.com');
+  assert.equal(blockEmail('','globex.com'),demoEmail('globex.com'));
+  assert.equal(demoEmail('acme.com'),'demo-acme-com@acme.com');
 });

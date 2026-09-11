@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {TOOLS,WRITE_TOOLS,READ_HANDLERS,listTools,validateCall} from '../lib/agent/tools.mjs';
 import {createRun} from '../lib/agent/run.mjs';
+import {FORBIDDEN_PATTERNS,emailReference} from '../lib/agent/facts.mjs';
 
 test('the registry has every entry the contract names, each with the required shape',()=>{
   const names=Object.keys(TOOLS);
@@ -178,4 +179,35 @@ test('gmail.find_sent_message and hubspot.get_customer read straight through to 
   assert.equal(gmailObs.found,true);assert.equal(gmailObs.message.id,'msg_1');
   const hubspotObs=await READ_HANDLERS['hubspot.get_customer']({args:{contactId:'123'},run:r,providers:{hubspot:{async getContact({properties}){return {properties:{[properties[0]]:'UNQUALIFIED'}};}}},config:{hubspot:{property:'hs_lead_status'}},now:()=>Date.now()});
   assert.equal(hubspotObs.value,'UNQUALIFIED');assert.equal(hubspotObs.property,'hs_lead_status');
+});
+
+test('gmail.send_message takes the prepared message by Message-ID with or without brackets, HTML-escaped, or by preparedId',()=>{
+  const bare=`sidelook-run_${'a'.repeat(20)}-1@sidelook.local`,bracketed=`<${bare}>`;
+  // Live runs on 2026-09-11 sent all three shapes; each names the same prepared message.
+  for(const given of [bracketed,bare,`&lt;${bare}&gt;`]){
+    const r=validateCall('gmail.send_message',{messageId:given});
+    assert.equal(r.ok,true,given);assert.equal(r.args.messageId,bracketed,`${given} normalizes to the bracketed id`);
+  }
+  const prep=validateCall('gmail.send_message',{messageId:`prep_${'b'.repeat(20)}`});
+  assert.equal(prep.ok,true);assert.equal(prep.args.messageId,`prep_${'b'.repeat(20)}`);
+  const bad=validateCall('gmail.send_message',{messageId:'msg_123'});
+  assert.equal(bad.ok,false);assert.match(bad.errors[0],/got "msg_123"/,'the error names what was sent');
+});
+
+test('gmail.prepare_message appends its own reference line and drops one carried over from an earlier preview',async()=>{
+  const r=run();
+  const governed=fakeGoverned({checkResult:{decision:'allow',nonFabrication:[{verdict:'pass',violations:[]}]}});
+  const obs=await READ_HANDLERS['gmail.prepare_message']({args:{to:'acme@example.com',subject:'Your refund',body:'We refunded $485.00.\n\nReference: SL0123456789AB'},run:r,governed,config:{},now:()=>Date.now()});
+  assert.equal(obs.ok,true);
+  const reference=emailReference(r.entities.email.messageId);
+  assert.equal(r.entities.email.body,`We refunded $485.00.\n\nReference: ${reference}`);
+  assert.equal((r.entities.email.body.match(/Reference:/g) || []).length,1);
+  assert.equal(governed.calls.check[0].content,r.entities.email.body,'DashClaw checks exactly the text that will be sent');
+});
+
+test('the timing-promise pattern catches a range of days, not only a single number',()=>{
+  // "within 1–3 business days" passed the live non-fabrication check on 2026-09-11 under the single-number pattern.
+  const pattern=new RegExp(FORBIDDEN_PATTERNS.find(p=>p.label==='timing_promise').pattern,'i');
+  for(const text of ['within 1–3 business days','within 3-5 working days','within 2 to 4 days','within 5 days']) assert.equal(pattern.test(text),true,text);
+  for(const text of ['in a few days','refund re_123 succeeded on 2026-09-11']) assert.equal(pattern.test(text),false,text);
 });
