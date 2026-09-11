@@ -4,7 +4,7 @@
   <p><strong>A desktop companion for Windows that runs on the ChatGPT or Claude subscription you already pay for, or on a local model in LM Studio or Ollama.</strong></p>
   <p>a <a href="https://practicalsystems.io">Practical Systems</a> product</p>
   <p><a href="https://github.com/ucsandman/sidelook/actions/workflows/ci.yml"><img src="https://github.com/ucsandman/sidelook/actions/workflows/ci.yml/badge.svg" alt="Windows and Linux checks"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2DD4A8" alt="MIT license"></a> <a href="https://github.com/ucsandman/sidelook/releases/latest"><img src="https://img.shields.io/github/v/release/ucsandman/sidelook" alt="Latest release"></a></p>
-  <p><a href="https://sidelook.practicalsystems.io/">Website</a> · <a href="https://github.com/ucsandman/sidelook/releases/download/v0.17.0/Sidelook-0.17.0-Windows-x64.exe">Download for Windows</a> · <a href="#getting-started">Get started</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
+  <p><a href="https://sidelook.practicalsystems.io/">Website</a> · <a href="https://github.com/ucsandman/sidelook/releases/download/v0.18.0/Sidelook-0.18.0-Windows-x64.exe">Download for Windows</a> · <a href="#getting-started">Get started</a> · <a href="CONTRIBUTING.md">Contribute</a></p>
 </div>
 
 Sidelook sits in the corner of your screen. Hit **Ctrl+Shift+Space** and a small panel opens already knowing which window you were in, with three questions written for it. Pick one, look at the screenshot it took, press **Send with screenshot**. The panel is only as tall as what is in it and grows as you talk. Or hand it something bigger: turn a sketch into a working prototype in the studio, or let it drive a Windows app one approved click at a time. Pick any model in the catalog, OpenAI through ChatGPT, Anthropic through Claude, or a local model in LM Studio or Ollama, go. No API key, nothing metered.
@@ -46,14 +46,14 @@ It's experimental and built around how I work. Anthropic models can burn paid Cl
 
 ## Getting started
 
-1. [Download Sidelook 0.17.0](https://github.com/ucsandman/sidelook/releases/download/v0.17.0/Sidelook-0.17.0-Windows-x64.exe) and open it. No terminal, no Node, no admin.
+1. [Download Sidelook 0.18.0](https://github.com/ucsandman/sidelook/releases/download/v0.18.0/Sidelook-0.18.0-Windows-x64.exe) and open it. No terminal, no Node, no admin.
 2. Settings opens by itself until you're signed in. Pick an OpenAI or Anthropic model and use the sign-in button. Codex ships inside. For Anthropic models, **Install official Claude Code** downloads and verifies Anthropic's runtime.
 3. Press a starter or type a question, then **↑**. **Screenshot** grabs the window you came from and shows it in the box before anything leaves; the button then reads **Send with screenshot**.
 4. For a prototype, press **Bench ↗** in the panel header to open the studio; it opens sized to your monitor and works down to 760x520. **Share window**, press **Use this frame** to put one still in the box, describe the product, and press **Build with frame**. The line under the box names what goes, including the selected version's source once you have one. For hands-off updates, **Live build** has its own permission dialog.
 
 **Ctrl+Shift+Space** brings the panel back. So does the desktop or Start menu shortcut. Closing the panel leaves Sidelook in the tray; **Quit Sidelook** from the tray menu stops the server.
 
-Windows 10/11 x64 only. Chrome or Edge for screen sharing. The download is about 164 MiB. **The exe is unsigned**, so expect the unknown-publisher prompt. The [release has a SHA-256 checksum](https://github.com/ucsandman/sidelook/releases/tag/v0.17.0) and the bundled Node and Codex are publisher-verified. [Install, update, remove](docs/WINDOWS.md).
+Windows 10/11 x64 only. Chrome or Edge for screen sharing. The download is about 164 MiB. **The exe is unsigned**, so expect the unknown-publisher prompt. The [release has a SHA-256 checksum](https://github.com/ucsandman/sidelook/releases/tag/v0.18.0) and the bundled Node and Codex are publisher-verified. [Install, update, remove](docs/WINDOWS.md).
 
 The companion needs the Microsoft Edge WebView2 Runtime. Sidelook checks on launch and tells you where to get it if it's missing. Its WebView profile is separate from any browser profile you used with an older install, so old revisions don't show up on their own. Export the HTML from the old profile, then **Settings, Advanced, Import a saved HTML prototype**. Imports cap at 120,000 bytes and add a version when the 12-slot history has room.
 
