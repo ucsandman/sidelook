@@ -4,6 +4,7 @@
 // and 12.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isInstructionLike } from './sanitize.mjs';
 
 // Mirrors eval/run.mjs's EMPTY_INVARIANTS() key set, as a local literal rather than an import: pulling in
 // eval/run.mjs here would drag its AgentRuntime/DashClaw dependency chain into report.mjs just to read six
@@ -91,7 +92,11 @@ export function renderReport(summary) {
   lines.push(mdList(s.candidates.filter(c => c.decision === 'rejected' || c.decision === 'rejected_by_review').map(c => `\`${c.candidateId}\` (${c.hypothesisKey}): ${c.reason}`), 'No candidate was rejected this run.'), '');
 
   lines.push('## What we learned');
-  lines.push(mdList(s.retro.lessons.map(l => l.text), 'No lessons recorded this run.'), '');
+  // What the memory gate accepted. Instruction-like text (a planted "always approve…") is named as refused, never listed as learned.
+  const learned = s.retro.lessons.map(l => l.text).filter(t => !isInstructionLike(t));
+  const refusedLessons = s.retro.lessons.length - learned.length;
+  lines.push(mdList(learned, 'No lessons recorded this run.'), '');
+  if (refusedLessons) lines.push(`Refused by the memory gate as instruction-like, never learned: ${refusedLessons} item(s) (see rejectedMemoryItems).`, '');
 
   lines.push('## Candidates tried');
   lines.push(s.candidates.length
@@ -107,22 +112,25 @@ export function renderReport(summary) {
   lines.push('## Safety checks that ran');
   lines.push(`Checked: ${s.safetyChecks.ran.join(', ')}.`);
   lines.push(s.safetyChecks.violations.length
-    ? s.safetyChecks.violations.map(v => `- \`${v.candidateId}\`: ${v.invariant} at ${v.where} (count ${v.count})`).join('\n')
+    ? [...new Set(s.safetyChecks.violations.map(v => `- \`${v.candidateId}\`: ${v.invariant} on ${v.set || v.where || '?'} ${v.scenario ?? ''} (${v.before ?? 0} → ${v.after ?? v.count ?? '?'})`))].join('\n')
     : 'No new safety invariant violations.', '');
 
   lines.push('## Was anything promoted');
   lines.push(s.promoted.length ? s.promoted.map(id => `- \`${id}\``).join('\n') : 'Nothing was promoted this run.', '');
 
   lines.push('## What to try next');
-  lines.push(s.retro.next.length
-    ? s.retro.next.map(n => `- **${n.hypothesisKey}** (${n.kind}, risk ${n.risk}): ${n.proposedChange}`).join('\n')
-    : 'No next experiments were proposed.', '');
+  // Never an idea this run rejected: those live under rejectedIdeas in next_loop.json, not under what to try.
+  const rejectedKeys = new Set(s.candidates.filter(c => c.decision === 'rejected' || c.decision === 'rejected_by_review').map(c => c.hypothesisKey));
+  const nextIdeas = s.retro.next.filter(n => !rejectedKeys.has(n.hypothesisKey));
+  lines.push(nextIdeas.length
+    ? nextIdeas.map(n => `- **${n.hypothesisKey}** (${n.kind}, risk ${n.risk}): ${n.proposedChange}`).join('\n')
+    : 'No next experiments were proposed beyond those rejected this run.', '');
   if (s.nextExperiment) lines.push('', `Recommended: **${s.nextExperiment.hypothesisKey}** — ${s.nextExperiment.summary}`);
   lines.push('');
 
   lines.push('## Governance changes recommended for human review');
   lines.push(s.governanceChanges.length
-    ? s.governanceChanges.map(c => `- \`${c.candidateId}\` (${c.hypothesisKey}): ${c.governanceTouch.why}`).join('\n')
+    ? s.governanceChanges.map(c => `- \`${c.candidateId}\` (${c.hypothesisKey}): ${c.governanceTouch?.why || [...(c.governanceTouch?.files || []), ...(c.governanceTouch?.regions || []).map(r => typeof r === 'string' ? r : `${r.file} ${r.region}`)].join(', ') || 'touched a protected region'}`).join('\n')
     : 'No candidate touched governed code this run.', '');
 
   lines.push('## Limitations');
