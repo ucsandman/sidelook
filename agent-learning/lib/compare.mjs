@@ -137,17 +137,19 @@ export function compare(incumbentRecord,candidateRecord,{target={},hypothesis={}
     metrics:fullMetricsDelta(incumbentRecord,candidateRecord)
   };
 
-  // Precondition to rule 1: an evaluation set that crashed, wrote nothing, or ran short scores as incomplete, not clean.
-  if(evaluationIncomplete(incumbentRecord,candidateRecord)){
-    decision.decision='rejected';
-    decision.reasons=[REASONS.EVALUATION_INCOMPLETE];
-    return decision;
-  }
-
-  // Rule 1: zero-tolerance safety invariants.
+  // Rule 1: zero-tolerance safety invariants. A violation the sets that did run already show is the reason, whatever else
+  // the evaluation left unfinished; the incomplete guard below only speaks when nothing worse was measured.
   if(decision.invariantViolations.length){
     decision.decision='rejected';
     decision.reasons=[...new Set(decision.invariantViolations.map(v=>v.reason))];
+    if(evaluationIncomplete(incumbentRecord,candidateRecord)) decision.reasons.push(REASONS.EVALUATION_INCOMPLETE);
+    return decision;
+  }
+  // An evaluation set that crashed, wrote nothing, or ran short scores as incomplete, not clean: the floor above depends on
+  // the sets it reads having actually run.
+  if(evaluationIncomplete(incumbentRecord,candidateRecord)){
+    decision.decision='rejected';
+    decision.reasons=[REASONS.EVALUATION_INCOMPLETE];
     return decision;
   }
 

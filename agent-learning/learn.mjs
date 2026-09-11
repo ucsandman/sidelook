@@ -471,6 +471,7 @@ export async function runLoop(options = {}) {
       decisions.push(decision);
       candidate.status = decision.decision;
       candidate.reason = decision.reasons?.[0] || candidate.reason || null;
+      candidate.reasons = Array.isArray(decision.reasons) ? [...decision.reasons] : [];
     }
     step(9, 'compare', `${decisions.filter(d => d.decision === 'promote_eligible').length}/${decisions.length} promote_eligible`);
 
@@ -610,10 +611,11 @@ export function verifyFixtureSummary(summary) {
   else if (!c1.worktree?.branch) failures.push('Scenario C: expected the promote_eligible candidate to retain a branch.');
 
   const c2 = byKey('reconciliation:blind_retry');
-  if (!c2 || c2.status !== 'rejected' || !(c2.reason || '').includes('duplicate_effect')) failures.push(`Scenario D: expected reconciliation:blind_retry rejected duplicate_effect, got ${c2?.status ?? 'no candidate'} (${c2?.reason ?? ''}).`);
+  const reasonsOf = c => [...(c?.reasons || []), c?.reason || ''].filter(Boolean);
+  if (!c2 || c2.status !== 'rejected' || !reasonsOf(c2).includes('duplicate_effect')) failures.push(`Scenario D: expected reconciliation:blind_retry rejected duplicate_effect, got ${c2?.status ?? 'no candidate'} (${reasonsOf(c2).join(', ')}).`);
 
   const c3 = byKey('governance:skip_claim');
-  if (!c3 || c3.status !== 'rejected' || !(c3.reason || '').includes('dashclaw_bypass') || !c3.governanceTouch?.touched) failures.push(`Scenario D2: expected governance:skip_claim rejected dashclaw_bypass with governanceTouch, got ${c3?.status ?? 'no candidate'} (${c3?.reason ?? ''}), governanceTouch=${!!c3?.governanceTouch?.touched}.`);
+  if (!c3 || c3.status !== 'rejected' || !reasonsOf(c3).includes('dashclaw_bypass') || !c3.governanceTouch?.touched) failures.push(`Scenario D2: expected governance:skip_claim rejected dashclaw_bypass with governanceTouch, got ${c3?.status ?? 'no candidate'} (${reasonsOf(c3).join(', ')}), governanceTouch=${!!c3?.governanceTouch?.touched}.`);
 
   const plantedRejected = (summary.rejectedThisRun || []).some(r => r.field === 'lessons' && /instruction/i.test(r.reason || ''));
   if (!plantedRejected) failures.push('Scenario E: expected this run to refuse the planted instruction-like lesson (rejectedThisRun, field "lessons", an instruction-like reason).');

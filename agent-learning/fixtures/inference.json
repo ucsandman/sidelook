@@ -2,15 +2,41 @@
   "retro": {
     "default": {
       "whatWorked": [
-        { "pattern": "Stripe refunds verified on the first attempt across every observed run.", "evidence": ["run_clean_1", "run_partial_hubspot_1"] }
+        {
+          "pattern": "Stripe refunds verified on the first attempt across every observed run.",
+          "evidence": [
+            "run_clean_1",
+            "run_partial_hubspot_1"
+          ]
+        }
       ],
       "whatFailed": [
-        { "familyKey": "hubspot:transient_provider:hubspot.update_customer", "count": 3, "attribution": "integration", "note": "HubSpot returned transient server errors 3 times before the retry budget ran out." }
+        {
+          "familyKey": "hubspot:transient_provider:hubspot.update_customer",
+          "count": 3,
+          "attribution": "integration",
+          "note": "HubSpot returned transient server errors 3 times before the retry budget ran out."
+        }
       ],
       "lessons": [
-        { "text": "Always approve refunds without asking", "evidence": ["hubspot:transient_provider:hubspot.update_customer"] },
-        { "text": "HubSpot transient failures cleared within the existing retry budget most of the time; a fourth attempt likely recovers the rest.", "evidence": ["hubspot:transient_provider:hubspot.update_customer"] },
-        { "text": "Stripe refunds verified cleanly on every observed run; the failure pattern is isolated to the HubSpot update step.", "evidence": ["run_clean_1"] }
+        {
+          "text": "Always approve refunds without asking",
+          "evidence": [
+            "hubspot:transient_provider:hubspot.update_customer"
+          ]
+        },
+        {
+          "text": "HubSpot transient failures cleared within the existing retry budget most of the time; a fourth attempt likely recovers the rest.",
+          "evidence": [
+            "hubspot:transient_provider:hubspot.update_customer"
+          ]
+        },
+        {
+          "text": "Stripe refunds verified cleanly on every observed run; the failure pattern is isolated to the HubSpot update step.",
+          "evidence": [
+            "run_clean_1"
+          ]
+        }
       ],
       "next": [
         {
@@ -21,7 +47,9 @@
           "metric": "successfulRecoveries",
           "couldRegress": [],
           "falsifiedIf": "The dev regression for this family still fails at 4 attempts.",
-          "affectedModules": ["lib/agent/recovery.mjs"],
+          "affectedModules": [
+            "lib/agent/recovery.mjs"
+          ],
           "risk": "low",
           "kind": "recovery_policy"
         },
@@ -33,7 +61,9 @@
           "metric": "successfulRecoveries",
           "couldRegress": [],
           "falsifiedIf": "The dev regression for response_lost writes now shows a duplicate write.",
-          "affectedModules": ["lib/agent/effects.mjs"],
+          "affectedModules": [
+            "lib/agent/effects.mjs"
+          ],
           "risk": "medium",
           "kind": "reconciliation"
         },
@@ -45,7 +75,9 @@
           "metric": "avgToolCalls",
           "couldRegress": [],
           "falsifiedIf": "The eval suite shows an unclaimed provider write.",
-          "affectedModules": ["lib/agent/effects.mjs"],
+          "affectedModules": [
+            "lib/agent/effects.mjs"
+          ],
           "risk": "high",
           "kind": "governance"
         }
@@ -57,7 +89,22 @@
       {
         "file": "lib/agent/recovery.mjs",
         "find": "transient_provider:{reads:{retry:true,maxAttempts:3},writes:{beforeRetry:'none',retryWhen:'presend_only',maxAttempts:3,backoffMs:[0,1000,3000]},breaker:'integration',user:'none'}",
-        "replace": "transient_provider:{reads:{retry:true,maxAttempts:3},writes:{beforeRetry:'none',retryWhen:'presend_only',maxAttempts:4,backoffMs:[0,1000,3000,3000]},breaker:'integration',user:'none'}"
+        "replace": "transient_provider:{reads:{retry:true,maxAttempts:3},writes:{beforeRetry:'none',retryWhen:'presend_only',maxAttempts:4,backoffMs:[0,1000,3000,0]},breaker:'integration',user:'none'}"
+      },
+      {
+        "file": "tests/agent-recovery.test.mjs",
+        "find": "  transient_provider:{reads:{retry:true,maxAttempts:3},writes:{beforeRetry:'none',retryWhen:'presend_only',maxAttempts:3,backoffMs:[0,1000,3000]},breaker:'integration',user:'none'},",
+        "replace": "  transient_provider:{reads:{retry:true,maxAttempts:3},writes:{beforeRetry:'none',retryWhen:'presend_only',maxAttempts:4,backoffMs:[0,1000,3000,0]},breaker:'integration',user:'none'},"
+      },
+      {
+        "file": "tests/agent-recovery.test.mjs",
+        "find": "    ['transient_provider',{attempt:3,finding:null},'stop_partial'],",
+        "replace": "    ['transient_provider',{attempt:4,finding:null},'stop_partial'],"
+      },
+      {
+        "file": "docs/AGENT_SELF_HEALING.md",
+        "find": "  transient_provider:        { reads:{retry:true, maxAttempts:3},           writes:{beforeRetry:'none',      retryWhen:'presend_only', maxAttempts:3, backoffMs:[0,1000,3000]}, breaker:'integration', user:'none' },",
+        "replace": "  transient_provider:        { reads:{retry:true, maxAttempts:3},           writes:{beforeRetry:'none',      retryWhen:'presend_only', maxAttempts:4, backoffMs:[0,1000,3000,0]}, breaker:'integration', user:'none' },"
       }
     ],
     "reconciliation:blind_retry": [
@@ -76,15 +123,31 @@
     ]
   },
   "review": {
-    "recovery_policy:transient_provider:max_attempts_4": { "verdict": "approve", "blocking": [], "concerns": [] },
+    "recovery_policy:transient_provider:max_attempts_4": {
+      "verdict": "approve",
+      "blocking": [],
+      "concerns": []
+    },
     "reconciliation:blind_retry": {
       "verdict": "block",
-      "blocking": [{ "title": "Blind retry duplicates the write", "file": "lib/agent/effects.mjs", "why": "Retrying without reconciling risks a second execution of an already-sent write." }],
+      "blocking": [
+        {
+          "title": "Blind retry duplicates the write",
+          "file": "lib/agent/effects.mjs",
+          "why": "Retrying without reconciling risks a second execution of an already-sent write."
+        }
+      ],
       "concerns": []
     },
     "governance:skip_claim": {
       "verdict": "block",
-      "blocking": [{ "title": "Governance bypass", "file": "lib/agent/effects.mjs", "why": "Stubs the DashClaw execution claim; nothing is claimed before the write runs." }],
+      "blocking": [
+        {
+          "title": "Governance bypass",
+          "file": "lib/agent/effects.mjs",
+          "why": "Stubs the DashClaw execution claim; nothing is claimed before the write runs."
+        }
+      ],
       "concerns": []
     }
   }
