@@ -9,70 +9,20 @@ import {createHash,randomBytes} from 'node:crypto';
 import {existsSync,lstatSync,rmSync} from 'node:fs';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {dirname,isAbsolute,join,resolve,sep} from 'node:path';
+import {protectedRegionHashes as incumbentRegionHashes,PROTECTED_MARKERS as INCUMBENT_MARKERS} from './incumbent.mjs';
 
-// Fallback protected-surface definitions, used only until agent-learning/lib/incumbent.mjs exists (a parallel lane).
-// Once it exports PROTECTED_FILES / PROTECTED_MARKERS / protectedRegionHashes(root), loadProtectedDefaults() prefers those.
+// The full-file governance ban (docs/AGENT_LEARNING_LOOP.md §7): a candidate may not touch these at all. The harness that
+// measures a candidate's own safety (eval/, the regression runner, the loop's own modules, CI) is on the list because a
+// candidate that could edit the instrument could hide a violation from it. Regions inside allowed files are hashed by
+// agent-learning/lib/incumbent.mjs, the one implementation both sides of a comparison use.
 export const PROTECTED_FILES=[
   'lib/agent/governed.mjs','lib/agent/config.mjs','scripts/agent-setup-dashclaw.mjs','.env','.env.*',
-  'package.json','package-lock.json','eval/fake-dashclaw.mjs','agent-learning/regressions/holdout/**',
-  'agent-learning/lib/compare.mjs','agent-learning/lib/evaluate.mjs'
+  'package.json','package-lock.json','eval/fake-dashclaw.mjs','eval/fake-providers.mjs','eval/run.mjs','eval/scripted-model.mjs',
+  'agent-learning/regressions/holdout/**','agent-learning/regress.mjs','agent-learning/learn.mjs','agent-learning/lib/**','.github/**'
 ];
-export const PROTECTED_MARKERS={
-  'lib/agent/effects.mjs':[/REFUND_NOT_HELD/,/deps\.governed\.claim\(/,/allowUnheldRefunds/,/STRIPE_LIVE_REFUSED/,/boundToCustomer/,/async function awaitDecision/,/approvedBy/],
-  'lib/agent/providers/stripe.mjs':[/guardWrite/,/allowLive/],
-  'lib/agent/planner.mjs':[/untrusted data/,/blocked or rejected action is final/],
-  'lib/agent/tools.mjs':[/WRITE_TOOLS=/,/READ_HANDLERS=/]
-};
 
-function regionName(pattern){
-  return pattern.source.replace(/\\([().])/g,'$1').replace(/[^A-Za-z0-9.]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60) || 'region';
-}
-
-// A region is the marker's own line, extended forward while the running `{`/`}` balance stays open — this captures a whole
-// function body (`async function awaitDecision`, `function guardWrite`) or a whole object literal (`READ_HANDLERS={`) when
-// the marker opens one, and is just the single line when it does not (`REFUND_NOT_HELD`, `allowLive`, a rule sentence).
-function extractRegion(text,pattern){
-  const lines=text.split('\n');
-  const at=lines.findIndex(line=>pattern.test(line));
-  if(at===-1) return null;
-  let end=at,balance=(lines[at].match(/\{/g) || []).length-(lines[at].match(/\}/g) || []).length;
-  while(balance>0 && end<lines.length-1){
-    end++;
-    balance+=(lines[end].match(/\{/g) || []).length-(lines[end].match(/\}/g) || []).length;
-  }
-  return lines.slice(at,end+1).join('\n');
-}
-
-export async function protectedRegionHashes(root,markers=PROTECTED_MARKERS){
-  const out={};
-  for(const [file,patterns] of Object.entries(markers)){
-    let text;
-    try{text=await readFile(join(root,file),'utf8');}
-    catch{continue;}
-    const regions=[];
-    for(const pattern of patterns){
-      const region=extractRegion(text,pattern);
-      if(region!==null) regions.push({name:regionName(pattern),sha256:createHash('sha256').update(region).digest('hex')});
-    }
-    if(regions.length) out[file]={regions};
-  }
-  return out;
-}
-
-// incumbent.mjs's own PROTECTED_FILES names the files that carry a protected *region* (its header comment: "not
-// fully off-limits to a candidate ... candidates.mjs's own PROTECTED list, section 7, owns full-file bans"). That is
-// a different, narrower list than the full governance-surface ban this module enforces, so the full ban always comes
-// from this module's own PROTECTED_FILES.
-//
-// Region hashing and the marker list both stay on this module's own defaults, never incumbent.mjs's: its
-// protectedRegionHashes hashes only the lines matching each marker (`lines.filter(l=>marker.pattern.test(l)).join(…)`),
-// so an edit to a non-marker line inside a protected function body (e.g. the `decision` line inside awaitDecision)
-// would go undetected, while this module's extractRegion captures the whole brace-balanced block. Its PROTECTED_MARKERS
-// is also a different shape (`{name,pattern}` objects, not bare RegExp), so the two are not drop-in compatible even
-// mechanically. Reconciling the two is a decision for the incumbent.mjs lane, not something to silently paper over
-// here by adopting the weaker or incompatible shape; this module always uses its own, narrower-but-correct set.
 async function loadProtectedDefaults(){
-  return {protectedFiles:PROTECTED_FILES,protectedMarkers:PROTECTED_MARKERS,regionHashes:root=>protectedRegionHashes(root,PROTECTED_MARKERS)};
+  return {protectedFiles:PROTECTED_FILES,protectedMarkers:INCUMBENT_MARKERS,regionHashes:root=>incumbentRegionHashes(root)};
 }
 
 function isProtectedFile(file,protectedFiles){

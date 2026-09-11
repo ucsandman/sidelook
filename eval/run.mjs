@@ -109,11 +109,20 @@ const mapApprovalStatus = status => (status === 'approved' ? 'approved' : status
 
 // A duplicate is a second provider call of the same write method for the same logical operation (payment intent, contact, or
 // Message-ID) beyond the first — never a second real refund, update or send for one opKey.
+function messageIdOf(raw) {
+  try {
+    const mime = Buffer.from(String(raw || ''), 'base64url').toString('utf8');
+    const match = /^Message-ID:\s*(.+)$/im.exec(mime);
+    return match ? match[1].trim() : String(raw || '');
+  } catch { return String(raw || ''); }
+}
 function countDuplicates(calls) {
   const keyOf = call => {
     if (call.method === 'stripe.createRefund') return `refund:${call.args.paymentIntentId}:${call.args.idempotencyKey}`;
     if (call.method === 'hubspot.updateContact') return `hubspot:${call.args.id}`;
-    if (call.method === 'gmail.send') return `gmail:${call.args.raw}`;
+    // Two sends of one prepared message differ in their Date header, so the raw bytes are not the identity; the Message-ID
+    // the runtime minted is (a blind resend carries the same one, which is exactly the duplicate this counts).
+    if (call.method === 'gmail.send') return `gmail:${messageIdOf(call.args.raw)}`;
     return null;
   };
   const counts = new Map();

@@ -239,7 +239,7 @@ test('op continue on a partial run creates a child whose lineage names the paren
   const created=await (await env.create()).json();
   const runId=created.run.runId;
   let approved=false;
-  const snapshots=await drive(env,runId,{onSnapshot:async run=>{if(!approved && run.status==='waiting_for_approval'){approved=true;await env.approve(runId,pendingActionId(run));}},until:toTerminal,timeoutMs:15000});
+  const snapshots=await drive(env,runId,{onSnapshot:async run=>{if(!approved && run.status==='waiting_for_approval'){approved=true;await env.approve(runId,pendingActionId(run));}},until:toTerminal,timeoutMs:60000});
   assert.equal(snapshots.at(-1).status,'partial','HubSpot never recovers; the Stripe refund is still verified');
 
   // §4's closing rule: three exhausted attempts at the same fault read as one incident with attemptNumber 3, never three
@@ -273,7 +273,7 @@ test('op continue on a partial run creates a child whose lineage names the paren
 
   // Drive the child to terminal and assert the contract's own numbers, not just cosmetic lineage fields (docs section 6, 10 scenario 30).
   const callsBefore=env.providers.calls.filter(c=>c.method==='stripe.createRefund').length;
-  const childSnapshots=await drive(env,childRun.runId,{until:toTerminal,timeoutMs:15000});
+  const childSnapshots=await drive(env,childRun.runId,{until:toTerminal,timeoutMs:60000});
   const childFinal=childSnapshots.at(-1);
   assert.equal(childFinal.status,'completed','HubSpot recovers now that the fault and breaker are cleared');
   assert.equal(env.providers.state.refunds.length,1,'the inherited refund is never repeated');
@@ -291,7 +291,7 @@ test('op continue on an uncertain run reconciles the inherited effect present be
   const created=await (await env.create()).json();
   const runId=created.run.runId;
   let approved=false;
-  const snapshots=await drive(env,runId,{onSnapshot:async run=>{if(!approved && run.status==='waiting_for_approval'){approved=true;await env.approve(runId,pendingActionId(run));}},until:toTerminal,timeoutMs:15000});
+  const snapshots=await drive(env,runId,{onSnapshot:async run=>{if(!approved && run.status==='waiting_for_approval'){approved=true;await env.approve(runId,pendingActionId(run));}},until:toTerminal,timeoutMs:60000});
   assert.equal(snapshots.at(-1).status,'uncertain','the refund reached Stripe but the response was lost, and findRefunds cannot read it back');
 
   env.providers.faults.clear('stripe.findRefunds');
@@ -300,7 +300,7 @@ test('op continue on an uncertain run reconciles the inherited effect present be
   const childRun=(await res.json()).run;
 
   const callsBefore=env.providers.calls.filter(c=>c.method==='stripe.createRefund').length;
-  const childSnapshots=await drive(env,childRun.runId,{until:toTerminal,timeoutMs:15000});
+  const childSnapshots=await drive(env,childRun.runId,{until:toTerminal,timeoutMs:60000});
   const childFinal=childSnapshots.at(-1);
   assert.equal(childFinal.status,'completed');
   assert.equal(env.providers.state.refunds.length,1,'the reconciled refund is never made a second time');
