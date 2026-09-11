@@ -83,6 +83,15 @@ try {
   await shot(1480);
   assert.ok(await page.locator('#companion').isVisible(),'the column stays inline at 1480');
   assert.equal(await page.locator('#chat-toggle').isVisible(),false,'no Chat button while the column is inline');
+  // F6 walks the four panes in order and lands on a control that is actually on screen; Shift+F6 walks back. Observed failing first when the
+  // handler picked a button inside a hidden wrapper: focus never left the direction pane.
+  await page.locator('#direction').focus();
+  const paneOf = () => page.evaluate(() => { const a=document.activeElement; return a.closest('.pane-direction')?'direction':a.closest('.pane-reference')?'reference':a.closest('.stage')?'stage':a.closest('#companion')?'panel':'none'; });
+  const walk = [];
+  for (let i = 0; i < 4; i++) { await page.keyboard.press('F6'); walk.push(await paneOf()); }
+  assert.deepEqual(walk,['reference','stage','panel','direction'],'F6 cycles direction, reference, stage, panel');
+  await page.keyboard.press('Shift+F6'); assert.equal(await paneOf(),'panel','Shift+F6 walks back');
+  checks.push('F6 cycles the four studio panes and Shift+F6 walks back');
   await shot(1180);
   for (const width of [1100,800]) {
     await atWidth(width);

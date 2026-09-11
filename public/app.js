@@ -578,7 +578,10 @@ document.addEventListener('keydown',event => {
   if (!panes.length) return; event.preventDefault();
   const at = panes.findIndex(p => p.contains(document.activeElement));
   const next = panes[(at + (event.shiftKey ? -1 : 1) + panes.length) % panes.length];
-  (next.querySelector('textarea') || next.querySelector('button:not([disabled]):not([hidden]),select') || next).focus();
+  // The first control that is actually on screen: a button inside a hidden wrapper is not [hidden] itself and cannot take focus.
+  const visible = el => !el.disabled && el.offsetParent !== null;
+  const target = [...next.querySelectorAll('textarea')].find(visible) || [...next.querySelectorAll('button,select,input')].find(visible) || next;
+  target.focus();
 });
 // Below 1180 the column cannot sit beside the studio, so Chat slides it over the right edge of the stage. Escape, ← Panel, and a window wide enough for the column all close it.
 function setChat(open) { document.body.classList.toggle('chat-open',open); $('chat-toggle').setAttribute('aria-expanded',String(open)); }
