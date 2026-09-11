@@ -1,5 +1,17 @@
 # Implementation lessons
 
+## 2026-09-11: Shipping 0.18.0
+
+- The site's one button has been dead for two releases and no check could see it. `ucsandman/sidelook` is a private
+  repository, so `releases/download/v0.17.0/...` answers 404 to everyone except the maintainer, whose `gh` token makes
+  it work from this machine every time. verify-site asserted the href string and the local asset routes, never that a
+  stranger can follow the link. It now fetches the pinned download and the release page with an anonymous HEAD and
+  fails under 400 (observed red first: 404 on both; a public repository answers 200 to the same call, confirmed
+  against cli/cli). A link is a claim about someone else's access, so verify it the way they would, signed out.
+- The release asset's own bytes were fine: `gh release download` returned 172,491,776 bytes hashing to
+  ea7e7d73...c7949, exactly the build. Authenticated success and anonymous success are different facts, and the one
+  the product depends on is the second.
+
 ## 2026-09-11: Bench, the champion UI
 
 - A Workflow agent's return value is its last assistant message. The tournament synthesizer wrote a 76K-character spec that

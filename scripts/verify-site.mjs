@@ -53,6 +53,12 @@ try {
   assert.ok(await page.getByText('This website provides a prepared walkthrough.',{exact:false}).isVisible());
   const href=await page.locator('#download-zip').getAttribute('href');
   assert.equal(href,`https://github.com/ucsandman/sidelook/releases/download/v${version}/Sidelook-${version}-Windows-x64.exe`);
+  // The pinned link only counts if a stranger can follow it. A private repository answers 404 to everyone but the
+  // maintainer, so the page keeps looking finished while its one button is dead; asserting the href alone never saw it.
+  for(const url of [href,`https://github.com/ucsandman/sidelook/releases/tag/v${version}`]){
+    const reply=await page.request.fetch(url,{method:'HEAD',maxRedirects:5,failOnStatusCode:false});
+    assert.ok(reply.status()<400,`${url} answers ${reply.status()} to an anonymous visitor`);
+  }
   // Every version string on the page is the current one, and the old name is gone; 0.15.0 shipped with the old name still in an install-step filename.
   const bodyText=await page.locator('body').innerText();
   const stale=[...new Set(bodyText.match(/Sidelook[ -]0\.\d+\.\d+/g) || [])].filter(v=>!v.endsWith(version));
