@@ -81,7 +81,7 @@ DashClaw did, and it's on the record."
 ## Between demo runs
 
 `npm run agent:seed` creates the demo customer's Slack message, Stripe customer and payment, and HubSpot contact
-(`AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN`, default Acme / acme.com). Run it once before the first Demo A or Demo
+(`AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN`, default Acme / acme.com; set `AGENT_DEMO_EMAIL` to an inbox you control, because Demo A really sends the confirmation there). Run it once before the first Demo A or Demo
 B of the session. Demo C only needs a resolvable customer, since its refund is blocked before any write is
 attempted, so it needs no reseed of its own.
 

@@ -256,3 +256,28 @@ Not yet exercised live: Slack, HubSpot and Gmail (no credentials on this machine
 - Gmail has no provider-side idempotency and its search index lags a send, so a send whose answer was lost stays `uncertain` (three delayed reads, never a resend) rather than being retried. Stripe (idempotency key plus refund metadata) and HubSpot (a property set to a value) are retried only after a read finds the write absent.
 - Two of the six DashClaw rows (`only api and email`, `writes carry evidence`) need free Short List slots on the org; the runtime enforces both rules itself, so the demos do not depend on them.
 - Restart reconciliation reads the providers once per uncertain write with a 30 s budget; a provider that is down at restart leaves the run `uncertain` with the reason in its errors.
+
+## What the first live run taught (2026-09-11)
+
+The first Demo A against the real Slack, Stripe, HubSpot, Gmail and DashClaw ended `failed` at the turn cap with the
+refund verified and nothing else done. Each cause was reproduced on its own and fixed; none touched the safety
+properties above.
+
+- **DashClaw refused the email's execution claim after recording it `allow`.** The claim is a fresh policy checkpoint
+  that re-evaluates from the stored decision context plus the act sent with the claim, and DashClaw strips a
+  non-fabrication policy's content and source paths from what it stores, so the policy failed closed at the claim
+  (decision ledger: `allow` at 07:15:01.493, `block: source-of-truth missing or malformed (fail-closed)` at
+  07:15:01.647). The email act now carries the content and the source of truth under `act.evidence`, and the policy
+  reads them from there at both evaluations. A side effect worth having: the act hash now binds the claim to the exact
+  email text. This is a DashClaw behaviour to report, not a Sidelook one; the folded record-and-claim path in
+  `POST /api/guard?record=true` avoids it, the separate claim after an approval does not.
+- **Haiku emitted catalog names as function calls.** One run in five called `slack.find_customer_request` as a tool
+  instead of returning the plan through StructuredOutput; the transport rejects any other tool, so the turn burned as
+  `REQUEST_FAILED`. The prompt now states that the tools are values for the `tool` field and StructuredOutput is the
+  only function.
+- **A local refusal read as a final block.** The model passed its own HubSpot value, the runtime refused it before
+  anything was sent, and the rules told the model a block is final, so it never tried again. A precondition refusal is
+  now `status: refused` with a `next` hint, and the tool descriptions say what to pass.
+- **Gmail rewrites the Message-ID for gmail.com senders**, so the send is verified by the id Gmail returns and a lost
+  answer is reconciled by the reference line in the body (see Gmail above).
+

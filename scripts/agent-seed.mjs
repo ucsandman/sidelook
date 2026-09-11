@@ -22,8 +22,9 @@ const stripeAuth=config=>({Authorization:`Bearer ${config.stripe.secretKey}`});
 const hubspotAuth=config=>({Authorization:`Bearer ${config.hubspot.token}`});
 const slackAuth=config=>({Authorization:`Bearer ${config.slack.token}`});
 
-// A domain reduced to something email-safe: 'acme.com' -> 'acme-com'. The seed email is always demo-<slug>@<domain> so
-// it never collides with a real customer's address on the same test account.
+// A domain reduced to something email-safe: 'acme.com' -> 'acme-com'. Without AGENT_DEMO_EMAIL the seed email is
+// demo-<slug>@<domain>, which never collides with a real customer's address on the same test account. Demo A really sends
+// the confirmation to this address, so AGENT_DEMO_EMAIL should be an inbox you control.
 function domainSlug(domain){
   const slug=String(domain || '').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
   return slug || 'demo';
@@ -135,7 +136,7 @@ async function seedGmail({config,providers,log}){
 // The one entry point tests could drive with fixture config/providers/fetchImpl. --reset only touches Stripe and
 // HubSpot (the two states a demo run actually changes); Slack and Gmail need nothing redone between demos.
 export async function runSeed({config,providers,fetchImpl=fetch,reset=false,log=console.log}={}){
-  const email=demoEmail(config.demo.domain);
+  const email=config.demo.email || demoEmail(config.demo.domain);
   log(reset?`Resetting demo state for ${config.demo.customer} <${email}> (Stripe + HubSpot only).`:`Seeding demo records for ${config.demo.customer} <${email}>.`);
   const steps=reset
     ?[['stripe',()=>seedStripe({config,providers,fetchImpl,email,log})],['hubspot',()=>seedHubspot({config,providers,fetchImpl,email,log})]]

@@ -12,7 +12,10 @@ export const SIDELOOK_POLICIES=[
   {name:'sidelook-agent: refunds need a human',policy_type:'protected_path',rules:{paths:['**/v1/refunds*'],action:'require_approval',short_list:true}},
   {name:'sidelook-agent: hold when the agent is unsure',policy_type:'risk_threshold',rules:{threshold:90,action:'require_approval',short_list:true}},
   {name:'sidelook-agent: block over the ceiling',policy_type:'risk_threshold',rules:{threshold:100,action:'block',short_list:true}},
-  {name:'sidelook-agent: no fabricated email',policy_type:'non_fabrication',rules:{action_types:['email'],on_violation:'block',short_list:true}},
+  // content_path/source_path point into the act: DashClaw strips these paths from the decision context it stores, and the
+  // execution claim re-evaluates from that stored context plus the act sent with the claim (app/lib/guard/execution.ts).
+  // Top-level content/source_of_truth are stripped and then missing at the claim, which fails closed (seen live 2026-09-11).
+  {name:'sidelook-agent: no fabricated email',policy_type:'non_fabrication',rules:{action_types:['email'],on_violation:'block',content_path:'act.evidence.content',source_path:'act.evidence.source_of_truth',short_list:true}},
   {name:'sidelook-agent: only api and email',policy_type:'role_constraint',rules:{allowed_action_types:['api','email'],escalate_action:'block',short_list:true}},
   {name:'sidelook-agent: writes carry evidence',policy_type:'require_evidence',rules:{action_types:['api','email'],enforcement:'block',short_list:true}}
 ];

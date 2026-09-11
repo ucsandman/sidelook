@@ -127,13 +127,14 @@ test('DashClaw: non-fabrication blocks a fabricated amount and passes the real f
   addFact(run,{key:'refund_amount',value:'$1.00',label:'refund_amount',source:'stripe',ref:'live-test'});
   addFact(run,{key:'refund_id',value:'re_livetest',label:'refund_id',source:'stripe',ref:'live-test'});
   const truth=sourceOfTruth(run);
-  const act=governed.actForHttp({method:'POST',url:'https://gmail.googleapis.com/gmail/v1/users/me/messages/send'});
+  // The policy reads content and source from the act (see scripts/agent-setup-dashclaw.mjs), so the act carries them.
+  const actFor=content=>governed.actForHttp({method:'POST',url:'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',body:content,evidence:{content,source_of_truth:truth}});
 
-  const fabricated=await governed.check({actionType:'email',declaredGoal:'Live test: fabricated amount',riskScore:30,act,content:'We refunded $9,999.00 to your account.',sourceOfTruth:truth});
+  const fabricated=await governed.check({actionType:'email',declaredGoal:'Live test: fabricated amount',riskScore:30,act:actFor('We refunded $9,999.00 to your account.'),content:'We refunded $9,999.00 to your account.',sourceOfTruth:truth});
   assert.equal(fabricated.decision,'block',`A fabricated amount was not blocked: ${JSON.stringify(fabricated)}`);
   console.log(`dashclaw live test: fabricated content blocked (${(fabricated.reasons || []).join('; ') || 'no reason given'})`);
 
-  const honest=await governed.check({actionType:'email',declaredGoal:'Live test: honest content',riskScore:30,act,content:'We refunded $1.00 to Sidelook Live Test (re_livetest).',sourceOfTruth:truth});
+  const honest=await governed.check({actionType:'email',declaredGoal:'Live test: honest content',riskScore:30,act:actFor('We refunded $1.00 to Sidelook Live Test (re_livetest).'),content:'We refunded $1.00 to Sidelook Live Test (re_livetest).',sourceOfTruth:truth});
   assert.notEqual(honest.decision,'block',`Honest content was blocked: ${JSON.stringify(honest)}`);
   console.log('dashclaw live test: honest content passed.');
 });

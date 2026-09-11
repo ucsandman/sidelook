@@ -25,7 +25,7 @@ const tried = (observations, tool) => (observations || []).some(o => o.tool === 
 const entriesFor = (observations, tool) => (observations || []).filter(o => o.tool === tool);
 const lastOf = (observations, tool) => entriesFor(observations, tool).at(-1) || null;
 const statusOf = entry => entry?.result?.status;
-const REFUSED = new Set(['blocked', 'rejected', 'expired']);
+const REFUSED = new Set(['blocked', 'rejected', 'expired', 'refused']);
 const SUCCEEDED = new Set(['verified', 'executed']);
 // Two most recent attempts at the same write, both plain failures (not blocked/rejected, which are final policy decisions handled
 // separately): the model stops proposing it again rather than looping to the turn cap.

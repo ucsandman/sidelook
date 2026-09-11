@@ -186,7 +186,7 @@ export function initAgent({api,getSelection,getState,onState}) {
       `${w.executed || 0} of ${w.planned || 0} write${w.planned===1?'':'s'} executed`,
       `${w.verified || 0} verified`,plural(a.required || 0,'approval'),
       plural(s.duplicates || 0,'duplicate side effect'),`${s.unresolved || 0} unresolved`];
-    const refusals=[['blocked',w.blocked],['rejected',w.rejected],['expired',w.expired],['verification unavailable',w.verificationUnavailable],['state uncertain',w.uncertain]]
+    const refusals=[['corrected before sending',w.corrected],['blocked',w.blocked],['rejected',w.rejected],['expired',w.expired],['verification unavailable',w.verificationUnavailable],['state uncertain',w.uncertain]]
       .filter(([,n])=>n>0).map(([label,n])=>`${n} ${label}`);
     return refusals.length?`${parts.join(' · ')} · ${refusals.join(', ')}`:parts.join(' · ');
   }
