@@ -156,5 +156,51 @@ export const SCENARIOS = [
     // PENDING, not FAIL (pendingEngineFix, set on the result, not read from `expect`).
     id:26, name:'Restart reconciliation', goal:GOAL_REFUND, custom:'restartReconciliation',
     expect:{status:'n/a — see runRestartReconciliationScenario', pendingEngineFix:true}
+  },
+  // Self healing (docs/AGENT_SELF_HEALING.md §10). `expect.incidents` names incident families with the recovery result the run
+  // must record; `expect.breakerOpen` a breaker key that must be open at the end; `continueRun` drives a second, continued run
+  // after the named faults clear; `expect.createRefusedCode` the code a further create must be refused with.
+  {
+    // A 429 with a Retry-After longer than the table's own backoff: the write is read back first (a 429 can follow a queued
+    // write), HubSpot holds no update, and the retry waits the header's 1.5 s, not the 1 s backoff.
+    id:27, name:'HubSpot rate limit with Retry-After', goal:GOAL_REFUND, fixtures:{}, faults:{'hubspot.updateContact':{kind:'rateLimit', times:1, retryAfterMs:1500}}, dashclaw:{approvalScript:'approve'}, model:{},
+    expect:{status:'completed', writes:threeVerified, approvals:{decision:'approved'}, recovered:true, noSuccessClaim:true, state:{refunds:1},
+      incidents:[{family:'hubspot:rate_limit:hubspot.update_customer', recoveryStrategy:'wait_then_retry', recoveryResult:'recovered'}], eventLabel:'Recovered'}
+  },
+  {
+    // Run 1 hits an expired Stripe token twice (the model asks once more after the fail-closed answer: a new action, a new approval,
+    // the same dead token), which opens the breaker. Run 2 cannot even look the customer up: every Stripe call is refused before
+    // it is made, nothing reaches DashClaw, and the run ends failed with the breaker named on the read that was not sent.
+    id:28, name:'Stripe authentication expired twice opens the breaker', goal:GOAL_REFUND, fixtures:{}, faults:{'stripe.createRefund':'authExpired'}, dashclaw:{approvalScript:'approve'}, model:{}, repeat:2,
+    expect:{status:'failed', writes:noWrites, approvals:{decision:null}, recovered:false, noSuccessClaim:true,
+      callCounts:{'stripe.createRefund':2}, breakerOpen:'stripe:authentication_expired', incidents:[{family:'stripe:authentication_expired:stripe.find_customer', recoveryStrategy:'open_breaker', recoveryResult:'failed_closed'}]}
+  },
+  {
+    // DashClaw goes unreachable at the first write and stays so; the second failure opens its breaker and the third run refuses
+    // the write without a network call, still as GOVERNANCE_UNAVAILABLE: nothing runs without DashClaw.
+    id:29, name:'DashClaw unavailable twice opens its breaker', goal:GOAL_REFUND, fixtures:{}, faults:{}, dashclaw:{approvalScript:'none', unavailableOnLabel:'Write: stripe.refund_payment'}, model:{}, repeat:3,
+    expect:{status:'blocked', writes:{requested:1, authorized:0, blocked:1, duplicate:0}, approvals:{decision:null}, recovered:false, noSuccessClaim:true,
+      effectErrorCode:'GOVERNANCE_UNAVAILABLE', callCounts:{'stripe.createRefund':0}, breakerOpen:'dashclaw:dashclaw_unavailable', incidents:[{family:'dashclaw:dashclaw_unavailable:stripe.refund_payment', recoveryStrategy:'open_breaker'}]}
+  },
+  {
+    // Run 1 ends partial: HubSpot never answers, six failures open its breaker. The outage ends, the operator clears the pause
+    // from Diagnostics and presses Continue: the child inherits the verified refund, reads nothing new from Stripe, finishes the
+    // update and the email once. One refund in Stripe, one email sent, nothing repeated.
+    id:30, name:'Continue after a partial run', goal:GOAL_REFUND, fixtures:{}, faults:{'hubspot.updateContact':'failAlways'}, dashclaw:{approvalScript:'approve'}, model:{}, continueRun:{clearFaults:['hubspot.updateContact'], resetBreakers:true},
+    expect:{status:'completed', writes:{requested:3, authorized:3, blocked:0, duplicate:0, verified:3, uncertain:0}, approvals:{decision:null}, recovered:false, noSuccessClaim:true,
+      state:{refunds:1, sent:1}, callCounts:{'stripe.createRefund':1}, effectStatusIn:{tool:'stripe.refund_payment', statuses:['verified']}}
+  },
+  {
+    // Run 1 loses Stripe's answer and cannot read back (the read fails all run), so it ends uncertain. Continue reads back first:
+    // Stripe holds the refund under the parent effect's id, so it is verified, never made again, and the rest of the goal completes.
+    id:31, name:'Continue after an uncertain run reconciles first', goal:GOAL_REFUND, fixtures:{}, faults:{'stripe.createRefund':'lostAfterSuccess', 'stripe.findRefunds':'failAlways'}, dashclaw:{approvalScript:'approve'}, model:{}, continueRun:{clearFaults:['stripe.findRefunds']},
+    expect:{status:'completed', writes:{requested:3, authorized:3, blocked:0, duplicate:0, verified:3, uncertain:0}, approvals:{decision:null}, recovered:true, noSuccessClaim:true,
+      state:{refunds:1, sent:1}, callCounts:{'stripe.createRefund':1}, effectStatusIn:{tool:'stripe.refund_payment', statuses:['verified']}}
+  },
+  {
+    // Four malformed plans across two runs open the model breaker; a third run is refused with MODEL_PAUSED before any turn.
+    id:32, name:'Repeated malformed plans open the model breaker', goal:GOAL_REFUND, fixtures:{}, faults:{}, dashclaw:{approvalScript:'none'}, model:{overrides:{1:'malformed', 2:'malformed'}}, repeat:2,
+    expect:{status:'failed', writes:noWrites, approvals:{decision:null}, recovered:false, noSuccessClaim:true, breakerOpen:'model:malformed_model_output', createRefusedCode:'MODEL_PAUSED',
+      incidents:[{family:'model:malformed_model_output:', recoveryStrategy:'retry', recoveryResult:'retried_failed'}]}
   }
 ];

@@ -139,6 +139,8 @@ export function createApp({ vision = new Vision(), assistant = new Assistant({vi
           const write = value => { if (closed || res.destroyed) return; if (!res.headersSent) res.writeHead(200,{ 'Content-Type':'application/x-ndjson; charset=utf-8','X-Accel-Buffering':'no' }); if (res.writableLength < 4_000_000) res.write(JSON.stringify(value)+'\n'); };
           const flush = () => { timer = null; if (!pending) return; const view = pending; pending = null; write({ type:'run',run:view }); if (['completed','partial','blocked','cancelled','failed','uncertain'].includes(view.status)) end(); };
           const end = () => { if (closed) return; closed = true; clearInterval(heartbeat); clearTimeout(timer); unsubscribe?.(); if (!res.destroyed) res.end(); };
+          // The page went away before the run ended: recorded once as a renderer interruption; the page reconnects on its own.
+          res.once('close',() => { if (!closed) runtime.noteWatchDrop?.(runId); });
           const heartbeat = setInterval(() => write({ type:'heartbeat',at:new Date().toISOString() }),10000);
           const unsubscribe = runtime.watch(runId,view => { pending = view; last = view; if (!timer) timer = setTimeout(flush,150); });
           if (!unsubscribe) { clearInterval(heartbeat); return send(200,{ type:'run',run:await runtime.get(runId) }); }
@@ -157,6 +159,15 @@ export function createApp({ vision = new Vision(), assistant = new Assistant({vi
           return send(200,await runtime[op](runId,actionId,typeof data.reason === 'string' ? data.reason : ''));
         }
         if (op === 'cancel') return send(200,{ run:await runtime.cancel(runId) });
+        // Self healing (docs/AGENT_SELF_HEALING.md §6, §8): continue a finished run from its evidence; read the incident and breaker ledgers.
+        if (op === 'continue') {
+          if (data.consent !== true) throw new AppError('Press Continue to let the agent carry on from this run.',403);
+          if (calls >= maxCalls) throw new AppError('Your local Sidelook request allowance is used up. Choose Start new allowance in Setup.',429,'SESSION_LIMIT');
+          const selected = selection(data);
+          const run = await runtime.continueRun(runId,{ ...selected,windowTitle:typeof data.windowTitle === 'string' ? data.windowTitle : undefined });
+          return send(200,{ run,remaining:maxCalls-calls });
+        }
+        if (op === 'diagnostics') return send(200,await runtime.diagnostics({ runId:runId || null }));
         throw new AppError('Unsupported agent operation.');
       }
       if(url.pathname==='/api/computer') {

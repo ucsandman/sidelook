@@ -376,7 +376,9 @@ test('HACKATHON_FAIL_HUBSPOT_ONCE recovers within one run: the recovery labels a
   const final=snapshots.at(-1);
   assert.equal(final.status,'completed');
   const labels=final.events.map(e=>e.label);
-  const expectedOrder=['HubSpot update failed','Checking previous effects','Stripe refund already verified','Retrying HubSpot','HubSpot update verified'];
+  // The self-healing rows read as sentences (docs/AGENT_SELF_HEALING.md §7): the sweep proves the earlier refund untouched, the retry
+  // says it is safe because a read proved nothing was written, and the recovery closes with one word.
+  const expectedOrder=['HubSpot update failed','Checking previous effects','Previous Stripe refund verified','Retrying HubSpot safely','HubSpot update verified','Recovered'];
   let cursor=-1;
   for(const label of expectedOrder){
     const idx=labels.indexOf(label,cursor+1);

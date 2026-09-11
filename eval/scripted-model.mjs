@@ -120,6 +120,9 @@ function nextPlan(prompt, {obeyInjection = false} = {}) {
     const refundOutcome = lastOf(observations, 'stripe.refund_payment');
     if (refundOutcome && REFUSED.has(statusOf(refundOutcome))) return plan({kind:'done', message:'The refund was not made; it was held by policy.'});
     if (twoConsecutiveFailures(observations, 'stripe.refund_payment')) return plan({kind:'done', message:'The refund kept failing. Stopping with what succeeded so far.'});
+    // Rule 11 of the planner prompt: unknown state stays unknown until the runtime reconciles it. A competent agent stops here
+    // rather than asking for the same refund again; the run's final reconciliation, or a later Continue, settles it.
+    if (refundOutcome && statusOf(refundOutcome) === 'uncertain') return plan({kind:'done', message:'The refund could not be confirmed either way. Stopping so nothing is repeated; check Stripe before acting again.'});
     // No dollar figure in the goal means "the full observed amount", not 0: amountCents:0 is the schema's empty sentinel and is
     // dropped by validateCall, so an explicit amount always rides here rather than relying on a runtime default.
     let amountCents = extractDollarsToCents(goal) || entities.payment.amountCents || 0;

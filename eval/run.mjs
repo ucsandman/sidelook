@@ -11,6 +11,7 @@ import {tmpdir} from 'node:os';
 import {join, dirname} from 'node:path';
 import {DashClaw} from 'dashclaw';
 import {AgentRuntime} from '../lib/agent/index.mjs';
+import {CircuitBreakers} from '../lib/agent/breakers.mjs';
 import {createFakeProviders} from './fake-providers.mjs';
 import {createScriptedModel} from './scripted-model.mjs';
 import {SCENARIOS} from './scenarios.mjs';
@@ -128,7 +129,7 @@ function countDuplicates(calls) {
 
 const check = (name, expected, actual) => ({name, expected, actual, pass:expected === actual});
 
-function evaluate(scenario, run, providers, pendingApprovalObserved, fakeDashClaw = null) {
+function evaluate(scenario, run, providers, pendingApprovalObserved, fakeDashClaw = null, extra = {}) {
   const effects = run.effects || [];
   const writes = {
     requested:effects.length,
@@ -180,9 +181,13 @@ function evaluate(scenario, run, providers, pendingApprovalObserved, fakeDashCla
     checks.push({name:`incident ${wanted.family || ''} ${wanted.recoveryResult || ''}`.trim(), expected:'present', actual:hit ? 'present' : 'absent', pass:!!hit});
   }
   if (scenario.expect.eventLabel) checks.push(check(`event "${scenario.expect.eventLabel}"`, true, run.events.some(e => e.label === scenario.expect.eventLabel)));
+  // scenarios 28, 29, 32: a circuit breaker opened for the named key and stayed open (docs/AGENT_SELF_HEALING.md §5).
+  if (scenario.expect.breakerOpen) checks.push(check(`breaker ${scenario.expect.breakerOpen} open`, true, (extra.breakers || []).some(b => b.key === scenario.expect.breakerOpen && b.state !== 'closed')));
+  // scenario 32: the runtime refused a new run while the model breaker was open, with the code the panel shows.
+  if (scenario.expect.createRefusedCode) checks.push(check('createRefusedCode', scenario.expect.createRefusedCode, extra.createRefusedCode ?? null));
 
   const invariants = computeInvariants(run, providers, noSuccessClaim, writes.duplicate, fakeDashClaw);
-  return {id:scenario.id, name:scenario.name, pass:checks.every(c => c.pass), checks, writes, recovered, status:run.status, finalMessage:run.finalMessage, invariants, incidents};
+  return {id:scenario.id, name:scenario.name, pass:checks.every(c => c.pass), checks, writes, recovered, status:run.status, finalMessage:run.finalMessage, invariants, incidents, breakers:extra.breakers || []};
 }
 
 // The safety invariants the learning loop rejects a candidate on (docs/AGENT_LEARNING_LOOP.md §9). Every count is per scenario
@@ -238,7 +243,9 @@ async function runScenario(scenario, tmpRoot) {
     const governed = createGoverned({config});
     runDir = await mkdtemp(join(tmpRoot, `s${scenario.id}-`));
     const store = new RunStore({dir:runDir});
-    const runtime = new AgentRuntime({inference, store, governed, providers, config});
+    // One breaker set per scenario, shared by its repeats, the way one Sidelook process shares them across runs.
+    const breakers = new CircuitBreakers({});
+    const runtime = new AgentRuntime({inference, store, governed, providers, config, breakers});
     // The 'dashboard' approvalScript submits the decision directly to the fake server with the approver key, as a person clicking
     // Approve in DashClaw's own dashboard would, never through Sidelook's /api/agent route.
     const dashClient = new DashClaw({baseUrl:fakeDashClaw.baseUrl, apiKey:'sk_test_fake_approver', agentId:'sidelook-agent'});
@@ -250,8 +257,24 @@ async function runScenario(scenario, tmpRoot) {
       last = outcome.run;
       pendingApprovalObserved = pendingApprovalObserved || outcome.pendingApprovalObserved;
     }
+    // scenarios 30-31: Continue the finished run after the named faults clear, as a person pressing Continue would (docs/AGENT_SELF_HEALING.md §6).
+    if (scenario.continueRun) {
+      for (const method of scenario.continueRun.clearFaults || []) providers.faults.clear(method);
+      // The operator's Diagnostics action after an outage ends: the runtime itself never resets a breaker.
+      if (scenario.continueRun.resetBreakers) for (const b of breakers.snapshot()) breakers.reset(b.key);
+      const child = await runtime.continueRun(last.runId, {});
+      const outcome = await driveRun(runtime, child.runId, scenario, fakeDashClaw, dashClient);
+      last = outcome.run;
+      pendingApprovalObserved = pendingApprovalObserved || outcome.pendingApprovalObserved;
+    }
+    // scenario 32: after the repeats, one more create must be refused while the model breaker is open.
+    let createRefusedCode = null;
+    if (scenario.expect.createRefusedCode) {
+      try { const extraRun = await runtime.create({goal:scenario.goal, model:'scripted', effort:'low'}); await runtime.cancel(extraRun.runId); createRefusedCode = 'CREATED'; }
+      catch (error) { createRefusedCode = error.code || 'ERROR'; }
+    }
     const elapsedMs = Date.now() - startedAt;
-    return {...applyElapsedCheck(evaluate(scenario, last, providers, pendingApprovalObserved, fakeDashClaw), scenario, elapsedMs), elapsedMs};
+    return {...applyElapsedCheck(evaluate(scenario, last, providers, pendingApprovalObserved, fakeDashClaw, {breakers:breakers.snapshot(), createRefusedCode}), scenario, elapsedMs), elapsedMs};
   } catch (error) {
     const code = error.code === 'ERR_MODULE_NOT_FOUND' ? 'DEPENDENCY_NOT_BUILT' : (error.code || 'RUNNER_ERROR');
     return {id:scenario.id, name:scenario.name, pass:false, status:'error', error:{code, message:error.message}, checks:[], writes:{requested:0, authorized:0, blocked:0, duplicate:0, verified:0, uncertain:0}, recovered:false, invariants:EMPTY_INVARIANTS(), incidents:[], elapsedMs:Date.now() - startedAt};
