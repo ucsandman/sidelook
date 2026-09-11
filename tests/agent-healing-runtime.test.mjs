@@ -14,6 +14,7 @@ import {createGoverned} from '../lib/agent/governed.mjs';
 import {RunStore} from '../lib/agent/store.mjs';
 import {createHealth} from '../lib/agent/health.mjs';
 import {AgentRuntime} from '../lib/agent/index.mjs';
+import {policyFor} from '../lib/agent/recovery.mjs';
 import {CircuitBreakers} from '../lib/agent/breakers.mjs';
 import {IncidentStore} from '../lib/agent/incidents.mjs';
 import {createApp} from '../server.mjs';
@@ -249,7 +250,10 @@ test('op continue on a partial run creates a child whose lineage names the paren
   assert.ok(hubspotFailAlwaysIncidents.length>=1,'HubSpot never recovering leaves at least one fault-episode incident');
   const effectIds=new Set(hubspotFailAlwaysIncidents.map(i=>i.effectId));
   assert.equal(effectIds.size,hubspotFailAlwaysIncidents.length,'one incident per effect: three exhausted attempts on the same effect merge onto one record, never three');
-  for(const incident of hubspotFailAlwaysIncidents) assert.equal(incident.attemptNumber,3,'each exhausted fault episode burned all three allowed attempts on its own record');
+  // The episode records exactly the attempts the policy table allows for this class, whatever the table says: the engine obeys
+  // the table, and a candidate that changes the table (docs/AGENT_SELF_HEALING.md section 4) is measured against its own row.
+  const allowedAttempts=policyFor('transient_provider').writes.maxAttempts;
+  for(const incident of hubspotFailAlwaysIncidents) assert.equal(incident.attemptNumber,allowedAttempts,`each exhausted fault episode burned all ${allowedAttempts} allowed attempts on its own record`);
 
   // The operator's Diagnostics action after an outage ends: clear the fault and the breaker before Continue (docs section 6).
   env.providers.faults.clear('hubspot.updateContact');
