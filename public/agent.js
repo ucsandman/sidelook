@@ -174,7 +174,7 @@ export function initAgent({api,getSelection,getState,onState}) {
   }
   function effectRow(effect) {
     const li=document.createElement('li');
-    const ids=[effect.effectId,effect.receipt?.id,effect.actionId].filter(Boolean).join(' · ');
+    const ids=[effect.effectId,effect.receipt?.id,effect.actionId,effect.decisionId].filter(Boolean).join(' · ');
     li.textContent=`${verdictWord(effect)} · ${effect.app} ${effect.tool}${ids?` · ${ids}`:''}`;
     return li;
   }

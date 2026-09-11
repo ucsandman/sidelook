@@ -406,7 +406,7 @@ SLACK_BOT_TOKEN, SLACK_CHANNELS (comma ids or names), SLACK_LOOKBACK_DAYS (30)
 STRIPE_SECRET_KEY (sk_test_…), STRIPE_ALLOW_LIVE (unset), AGENT_REFUND_MAX_CENTS (100000 = $1,000)
 HUBSPOT_ACCESS_TOKEN, HUBSPOT_STATUS_PROPERTY (hs_lead_status), HUBSPOT_STATUS_VALUE (UNQUALIFIED), HUBSPOT_ALLOWED_VALUES
 GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_FROM
-AGENT_DEMO_CUSTOMER (Acme), AGENT_DEMO_DOMAIN (acme.com), AGENT_DEMO_EMAIL (empty: demo-<slug>@<domain>; Demo A emails it, so set an inbox you control)   # used by the seed script only
+AGENT_DEMO_CUSTOMER (Acme), AGENT_DEMO_DOMAIN (acme.com), AGENT_DEMO_EMAIL (empty: demo-<slug>@<domain>; Demo A emails it, so set an inbox you control), AGENT_DEMO_BLOCK_EMAIL (Demo C's Globex customer; empty: a +globex alias of AGENT_DEMO_EMAIL)   # used by the seed script only
 HACKATHON_FAIL_HUBSPOT_ONCE (1 = Demo B), RUN_LIVE_AGENT_TESTS (1 = live tests)
 SIDELOOK_AGENT_DATA (override the run store directory)
 ```

@@ -65,11 +65,13 @@ the earlier one was untouched."
 Type into the goal box, exactly:
 
 ```
-Acme cancellation: refund $50,000 for the last payment, mark the CRM lead unqualified, and email confirmation.
+Globex cancellation: refund $5,000 for the last payment.
 ```
 
-Click **Start**. The timeline shows the refund blocked by DashClaw policy, the risk ceiling, never even offered for
-approval.
+Click **Start**. Globex is the seed's second customer: one $5,000.00 payment, above the $1,000.00 refund ceiling
+(`AGENT_REFUND_MAX_CENTS`). The timeline shows the refund blocked by DashClaw policy, the risk ceiling, never even
+offered for approval. (Asking for $50,000 on Acme's $485.00 payment is a different thing: the runtime refuses it
+before DashClaw is asked, "only $485.00 is refundable", and the model may correct the amount.)
 
 Switch to the DashClaw dashboard tab, open **/decisions**, and open the blocked action's own page at
 **/decisions/`<action id>`** (the action id is also visible under the blocked row's Details in Sidelook). Show the
@@ -81,9 +83,9 @@ DashClaw did, and it's on the record."
 ## Between demo runs
 
 `npm run agent:seed` creates the demo customer's Slack message, Stripe customer and payment, and HubSpot contact
-(`AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN`, default Acme / acme.com; set `AGENT_DEMO_EMAIL` to an inbox you control, because Demo A really sends the confirmation there). Run it once before the first Demo A or Demo
-B of the session. Demo C only needs a resolvable customer, since its refund is blocked before any write is
-attempted, so it needs no reseed of its own.
+(`AGENT_DEMO_CUSTOMER` / `AGENT_DEMO_DOMAIN`, default Acme / acme.com; set `AGENT_DEMO_EMAIL` to an inbox you control, because Demo A really sends the confirmation there). It also seeds Demo C's Globex customer (a $5,000.00 payment and its own Slack request). Run it once before the
+first Demo A or Demo B of the session. Demo C's refund is blocked before any write is attempted, so it never needs a
+reseed of its own.
 
 Between Demo A and Demo B (both refund the same demo payment), run:
 
