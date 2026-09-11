@@ -21,6 +21,11 @@ function buildChildEnv(agentDataDir){
   for(const key of ENV_ALLOWLIST) if(process.env[key]!==undefined) env[key]=process.env[key];
   env.NODE_OPTIONS='';
   env.SIDELOOK_AGENT_DATA=agentDataDir;
+  // The env allowlist above still carries LOCALAPPDATA/APPDATA/HOME/USERPROFILE, so a child process that calls
+  // loadConfig() could otherwise fall back to a real .env beside a packaged install on this machine (lib/agent/config.mjs).
+  // No test in the tree is meant to touch a real credential in this child (§8: "the child environment carries no .env
+  // variables at all"); this is the config-side half of that guarantee, not just an env-var allowlist.
+  env.SIDELOOK_NO_ENV_FILE='1';
   delete env.RUN_LIVE_AGENT_TESTS;
   return env;
 }

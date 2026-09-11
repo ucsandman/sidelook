@@ -79,12 +79,13 @@ codebase.
 synthetic `SERVER` error. The timeline shows, in order, these exact labels from `effects.mjs`:
 
 1. **"HubSpot update failed":** the injected error, recorded `failed` because it never reached HubSpot
-   (`sentRequest:false`, so there is nothing to reconcile).
+   (`sentRequest:false`, so there is nothing to reconcile). An incident is recorded (`hubspot:transient_provider:hubspot.update_customer`).
 2. **"Checking previous effects":** the run transitions to `recovering` and the sweep begins.
-3. **"Stripe refund already verified":** the sweep's re-read of the earlier refund, proving it was not touched.
-4. **"Retrying HubSpot":** the second attempt, after a 1s backoff.
-5. **"HubSpot update verified":** the retry's receipt, then a fresh HubSpot read confirming the property. The
-   effect closes `verified` and the run continues.
+3. **"Previous Stripe refund verified":** the sweep's re-read of the earlier refund, proving it was not touched.
+4. **"Retrying HubSpot safely":** the second attempt, after a 1s backoff.
+5. **"HubSpot update verified":** the retry's receipt, then a fresh HubSpot read confirming the property.
+6. **"Recovered":** the effect closes `verified`, the incident's `recoveryResult` is `recovered`, and the run
+   continues. Asserted by eval scenario 13 and, with a Retry-After header instead of a plain 503, scenario 27.
 
 ## Uncertain state
 
@@ -98,6 +99,36 @@ stops new work, not finding out what already happened: the final reconciliation 
 A run with every other write verified can still end `uncertain` because of one write nobody could confirm either
 way. The same reads happen on restart: a run interrupted mid-write is reconciled against the providers before it is
 stamped, and a write that had reached DashClaw is treated as uncertain until a read says otherwise.
+
+## Typed incidents, breakers, resume and Continue
+
+Full contract: `docs/AGENT_SELF_HEALING.md`. Every claim below names the test or scenario that checks it.
+
+- **Every fault becomes one typed incident.** `lib/agent/incidents.mjs`'s `classifyFailure` maps a provider error and
+  its phase to one of 23 fixed failure classes; the incident rides on `run.incidents[]` and is also written to its
+  own file under `<dataDir>/../incidents/`. Checked by `tests/agent-incidents.test.mjs` and, end to end, by every
+  eval scenario's `incidents` assertion (`eval/scenarios.mjs` scenarios 27, 28 and 32 name both the exact family and
+  recovery result; 29 names the family and strategy; 13, 30 and 31 assert the ledger outcome instead).
+- **A retry follows a policy table, never ad hoc logic.** `lib/agent/recovery.mjs`'s `decideWrite`/`decideRead` are
+  pure functions consulted by `effects.mjs` for writes and by `lib/agent/http.mjs`'s `retryRead` for reads; nothing
+  else decides whether to retry.
+  Checked by `tests/agent-recovery.test.mjs` (every failure class against every finding) and by scenario 27
+  (a 429 with `Retry-After` waits the header's delay, not the table's own backoff).
+- **A repeated fault opens a breaker before the next attempt is even made.** `lib/agent/breakers.mjs`'s
+  `CircuitBreakers` refuses a read or a write with `CIRCUIT_OPEN`, refuses a governed write with
+  `GOVERNANCE_UNAVAILABLE`, and refuses a new run with `MODEL_PAUSED` (429) while the relevant breaker is open, with
+  no network or DashClaw call made. Checked by `tests/agent-breakers.test.mjs` and by eval scenarios 28 (a second run
+  cannot even look the customer up: `callCounts.stripe.createRefund:2`, no third attempt), 29 (a third write is
+  refused `GOVERNANCE_UNAVAILABLE` with zero calls) and 32 (a third `create` is refused `MODEL_PAUSED` before any
+  turn runs).
+- **A restart reads the providers back before stamping a run, never resumes a model loop.** `lib/agent/resume.mjs`'s
+  `planResume`/`applyResume`, driven by `AgentRuntime.reconcileStored()`. Checked by `tests/agent-resume.test.mjs`
+  and by eval scenario 26 (restart reconciliation).
+- **Continue never repeats a proven write.** `lineageFor` keys every effect on the root run id, so Stripe's
+  idempotency key and DashClaw's action are both shared across the lineage; an inherited `verified`/`executed`
+  effect sends nothing; an inherited `uncertain` effect reconciles first. Checked by eval scenarios 30 (a partial
+  run recovers with `callCounts.stripe.createRefund:1`, one refund, one email) and 31 (an uncertain run reconciles
+  to the same refund before completing the rest of the goal, `recovered:true`).
 
 ## The prompt-injection boundary
 
@@ -179,7 +210,7 @@ verified / uncertain / duplicate writes, the approval's resolved decision, wheth
 
 ## Results
 
-Run with `node eval/run.mjs --json .artifacts/agent-eval.json` on 2026-09-10, after the adversarial reviews (scenarios 21 to 26 were added from their findings).
+Run with `node eval/run.mjs --json .artifacts/agent-eval.json` on 2026-09-10, after the adversarial reviews (scenarios 21 to 26 were added from their findings). The suite is now 32 scenarios (27-32 added for self healing, section above); the table below is that 2026-09-10 run of scenarios 1-26 only, not coverage of 27-32.
 
 | Metric | Value |
 | --- | --- |
@@ -258,6 +289,41 @@ Approve button, Haiku 4.5 at low effort, completed with 3 of 3 writes verified, 
 Demo B and C ran before the two holds were installed `ungrantable`; Demo A above ran after, and its refund was held by
 the new row. One Demo A in between ran a $485.00 test-mode refund with no approval, which is how the interruption
 budget problem was found (see "What the first live run taught" below). That run is not counted as a pass.
+
+## The learning loop's safety invariants and holdout
+
+Full contract: `docs/AGENT_LEARNING_LOOP.md`. The learning loop is a separate, offline system (`agent-learning/`, run
+by a person); it never runs during a live demo and never rewrites Sidelook's source itself. Every claim below names
+the test that checks it.
+
+- **A candidate is rejected the moment it raises a zero-tolerance invariant above the incumbent.**
+  `agent-learning/lib/compare.mjs`'s rule 1 checks `unclaimedWrites`, `unheldFinancialWrites`, `duplicateEffects`,
+  `incorrectSuccessClaims`, `secretLeaks` and `injectionAuthorized` on every eval/dev/holdout case's `invariants`
+  block (the `tests` set contributes pass/fail only, through rule 2); a candidate
+  count higher than the incumbent's own count on the same case is an automatic rejection, whatever the rest of the
+  numbers say. Checked by `tests/learning-compare.test.mjs` (every rejection rule) and, end to end, by
+  `npm run verify:learn`'s Scenario D (`reconciliation:blind_retry` skips a reconciliation read and is rejected
+  `duplicate_effect`) and Scenario D2 (`governance:skip_claim` skips the DashClaw claim and is rejected
+  `dashclaw_bypass`, with `governanceTouch:true` recorded on top).
+- **A candidate must pass every holdout case for its target family, never just the dev case it was shown.**
+  `compare.mjs` rule 4; the dev/holdout split (`agent-learning/lib/reduce.mjs`'s `assignSet`) alternates cases for a
+  repeated family so a family with two or more cases always has a holdout case backing its dev one, and a test
+  asserts the assembled generation prompt contains no holdout scenario id and no holdout file content
+  (`tests/learning-loop.test.mjs`, `tests/learning-retro.test.mjs`). Checked structurally by
+  `tests/learning-reduce.test.mjs` and by `tests/learning-compare.test.mjs`'s holdout-regression cases.
+- **A change to the governance surface is never autonomous.** `agent-learning/lib/candidates.mjs`'s `PROTECTED_FILES`
+  list and `incumbent.mjs`'s `PROTECTED_MARKERS` regions (the claim call, the refund-hold check, the read/write tool split, and more)
+  mark a candidate `needs_human_review` the moment it touches any of them, and `compare.mjs` rule 6 repeats the
+  check so a candidate can never read `promote_eligible` by numbers alone. Checked by `tests/learning-candidates.test.mjs`.
+- **Nothing is promoted without an independent review.** `agent-learning/lib/review.mjs`'s reviewer is a different
+  model from the generator by default (opus unless the generator is opus, then fable); a `block` verdict, or a
+  review that could not run at all, keeps the candidate off `promote_eligible`. Checked by
+  `tests/learning-review.test.mjs`.
+- **`npm run verify:learn` proves the whole loop end to end**, with no live model and no network call, against the
+  fixture corpus in `agent-learning/fixtures/`: one candidate promote-eligible, two rejected for the reasons above,
+  and one planted instruction-like lesson refused before it ever reaches learning memory (Scenario E,
+  `assertNoInstruction`, `tests/learning-sanitize.test.mjs`). `docs/HACKATHON_DEMO.md`'s Demo D walks through a real
+  run's `learning_report.md`.
 
 ## Known limits
 

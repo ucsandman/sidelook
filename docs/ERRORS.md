@@ -1,5 +1,38 @@
 # Implementation lessons
 
+## 2026-09-11: Self healing and the Agent Learning Loop
+
+- A candidate worktree's `node_modules` was a junction back into the main tree's `node_modules`, and a recursive
+  delete of the worktree followed the junction and emptied the repository's own `node_modules`. Fix: a candidate
+  worktree lives at `.worktrees/<candidateId>` inside the repository, never a symlink, a junction, a copy or an
+  `npm install` of its own; Node's own upward module resolution from `.worktrees/<id>/eval/run.mjs` finds the
+  repository's `node_modules` on its own, and `removeCandidate`/`removeWorktree` unlink any `node_modules` link
+  inside a worktree before any recursive removal runs, as defence in depth (`agent-learning/lib/candidates.mjs`).
+- A successful read on one Stripe call cleared the count backing an *authentication* breaker for the same
+  integration, so a dead write token's breaker never opened. A working call disproves an outage, not a dead
+  credential. Fix: `CircuitBreakers.recordSuccess` clears only outage-shaped classes (`transient_provider`,
+  `timeout_before_request`, `rate_limit`, `dashclaw_unavailable`); an authentication or model-fault count is not
+  disproved by an unrelated call succeeding and ages out by its own window alone (`lib/agent/breakers.mjs`).
+- A continued run replayed the parent's already-consumed DashClaw action: the child kept the same idempotency key
+  for an effect the parent had already failed on, so the fresh attempt read as a duplicate of one DashClaw
+  considered settled. Fix: `nextSeries(run, tool, opKey)` gives a fresh logical attempt its own `series`, a new
+  idempotency key and a new DashClaw action. Inside one run this only advances past a `failed` attempt with an
+  `actionId`, so an attempt DashClaw actually refused (`blocked`/`rejected`/`expired`) keeps its original key on
+  purpose, since a replay should read the same verdict; across a Continue, `lineageFor` (`lib/agent/resume.mjs`)
+  populates `attempts` from every prior effect carrying an `actionId` whatever its end, so `nextSeries` advances
+  past those too and a Continue never reuses a settled key (`lib/agent/run.mjs`, `docs/AGENT_SELF_HEALING.md`
+  section 4).
+- An open Stripe authentication breaker also refuses Stripe *reads*, not just writes, so eval scenario 28's second
+  run cannot even look the customer up: every Stripe call is refused `CIRCUIT_OPEN` before it is made, nothing
+  reaches DashClaw, and the run ends `failed` with zero writes and zero new calls, not `blocked`, because nothing
+  was ever proposed to DashClaw for it to block. Counted, not a defect: the scenario asserts exactly this
+  (`callCounts.stripe.createRefund:2`, no third attempt).
+- The learning loop's incumbent baseline was first measured against the live working tree, which a person or another
+  agent could be editing while the loop ran, making the baseline numbers describe bytes nobody could reproduce. Fix:
+  `learn.mjs` checks out the frozen revision into its own detached worktree (`checkoutIncumbent`) before hashing it
+  or evaluating it, and removes that worktree once the baseline evaluation finishes; a dirty working tree is
+  reported (`incumbent.workingTreeDirty`) but never measured.
+
 ## 2026-09-06: Local models, the Bench button, chat controls (0.17.0)
 
 - The Codex-to-LM-Studio proof used a two-line instruction and returned JSON; the companion's real prompt ("plain text without Markdown") returned prose, because LM Studio does not enforce Codex's `--output-schema`. A transport proof runs on the product's captured system prompt, schema and stdin, never a stand-in. Fix: the schema rides in the instructions, the one JSON object is read out of the reply, a prose reply gets one retry, and the conversation reads words as its reply.

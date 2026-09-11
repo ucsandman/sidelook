@@ -1,20 +1,37 @@
 # Agent mode evaluation harness
 
-`node eval/run.mjs [--only id] [--json path]` runs the twenty-six fixed scenarios in `eval/scenarios.mjs` against a
+`node eval/run.mjs [--only id] [--json path]` runs the thirty-two fixed scenarios in `eval/scenarios.mjs` against a
 real `AgentRuntime` (`lib/agent/index.mjs`), a real in-process DashClaw (`eval/fake-dashclaw.mjs`), in-memory
 Slack/Stripe/HubSpot/Gmail (`eval/fake-providers.mjs`) and a scripted model (`eval/scripted-model.mjs`) instead of a
 live model transport. Nothing here reaches a real network service. Contract: `docs/AGENT_MODE_IMPLEMENTATION.md`
-section 16.
+section 16, `docs/AGENT_SELF_HEALING.md` section 10 (scenarios 27-32).
 
 ```
-node eval/run.mjs                       # all 26 scenarios, report at .artifacts/agent-eval.json
+node eval/run.mjs                       # all 32 scenarios, report at .artifacts/agent-eval.json
 node eval/run.mjs --only 6              # one scenario
 node eval/run.mjs --json out/report.json
 ```
 
-Scenario 26 (restart reconciliation) is expected to fail today: it exercises a `lib/agent/index.mjs` contract
-(`reconcileStored()` reading providers back after a crash) that has not landed yet. It reports `PENDING`, not `FAIL`,
-in the table and does not affect the process exit code; every other scenario failing still does.
+## Self healing scenarios (27-32)
+
+Added for `lib/agent/{incidents,recovery,breakers,resume}.mjs`, docs/AGENT_SELF_HEALING.md section 10:
+
+| id | Scenario | Proves |
+| --- | --- | --- |
+| 27 | HubSpot rate limit with Retry-After | the write waits the header's delay, reconciles first, retries once, verifies; incident `hubspot:rate_limit:hubspot.update_customer` recovered |
+| 28 | Stripe authentication expired twice opens the breaker | run 1's dead token opens `stripe:authentication_expired`; run 2 is refused `CIRCUIT_OPEN` on the read before any call, `callCounts.stripe.createRefund:2` |
+| 29 | DashClaw unavailable twice opens its breaker | a third write is refused `GOVERNANCE_UNAVAILABLE` with zero network calls |
+| 30 | Continue after a partial run | a HubSpot outage ends run 1 `partial`; clearing the fault and pressing Continue finishes the goal with no new Stripe write |
+| 31 | Continue after an uncertain run reconciles first | run 1 loses Stripe's answer and cannot read it back, ending `uncertain`; Continue reconciles the inherited effect before doing anything else |
+| 32 | Repeated malformed plans open the model breaker | four malformed turns across two runs open `model:malformed_model_output`; a third `create` is refused `MODEL_PAUSED` |
+
+`faults` on these scenarios can take the object form as well as a bare string: `{kind:'failTimes', times:n}` (a
+`SERVER` error before send, `n` times in a row) and `{kind:'rateLimit', times:n, retryAfterMs}` (a 429 with a
+`Retry-After` header, `sentRequest:true`); `'authExpired'` is unchanged (a bare string, not an object). `scenario.repeat` runs the scenario
+that many times in sequence against the same fake DashClaw/providers/breakers, so a breaker's state (or a model
+turn count) carries from one run to the next, and `scenario.continueRun` drives a second run from
+`runtime.continueRun(parentRunId, …)` after the named faults clear (and, when `resetBreakers:true`, the breaker
+snapshot is reset first, standing in for the Diagnostics action an operator would take).
 
 ## Files
 
@@ -41,10 +58,13 @@ in the table and does not affect the process exit code; every other scenario fai
   `'createAction'`), `opts.status` answers with that HTTP status, `opts.drop` destroys the socket after the state
   change it describes has already been recorded server-side (the claim row, the block) — so a `drop` fault always
   represents a real answer lost in transit, never a request that never arrived.
-- `eval/scenarios.mjs` — `SCENARIOS`, the twenty-six fixed cases. Each names its fixtures, provider faults, a
+- `eval/scenarios.mjs` — `SCENARIOS`, the thirty-two fixed cases. Each names its fixtures, provider faults, a
   DashClaw `approvalScript` (`approve|reject|dashboard|timeout|none`), scripted-model overrides, and `expect`.
   Scenario 26 additionally sets `custom:'restartReconciliation'`, which routes it to `eval/run.mjs`'s dedicated
-  function instead of the normal driver.
+  function instead of the normal driver. Scenarios 28, 29 and 32 set `repeat:n` (run the scenario `n` times in a row
+  against the same fake DashClaw/providers/breakers, so the breaker's own count carries across runs); scenarios 30
+  and 31 set `continueRun:{clearFaults, resetBreakers?}` (run once, clear the named faults, then drive
+  `runtime.continueRun` on the first run's id).
 - `eval/run.mjs` — the runner: builds the dependencies per scenario, drives the run to a terminal status (answering
   `waiting_for_user` with the first offered option, deciding `waiting_for_approval` per `approvalScript`, cancelling on
   `stopAfter`'s event label for the Emergency Stop and cancel-mid-write scenarios, flipping the fake DashClaw server
@@ -53,7 +73,13 @@ in the table and does not affect the process exit code; every other scenario fai
   `runRestartReconciliationScenario` (scenario 26 only) builds a first `AgentRuntime` whose store stops accepting
   writes the instant the refund goes `uncertain` (simulating a crash at that exact point, without racing the run's own
   eventual — different — terminal status), then builds a second `AgentRuntime` over the same on-disk file and the
-  same fake providers and calls `reconcileStored()`, as a restarted Sidelook process would.
+  same fake providers and calls `reconcileStored()`, as a restarted Sidelook process would. Exports:
+  `runScenario, evaluate, aggregate, buildConfig, wrapScriptedModel, countDuplicates, printTable, computeInvariants,
+  EMPTY_INVARIANTS`. `agent-learning/regress.mjs` imports `runScenarios` (plural, the same driver `main()` uses) and
+  `printTable` directly from this file rather than re-implementing either, so a regression case is graded exactly
+  like a fixed eval scenario: same per-scenario shape, same invariants, same incidents.
+  `agent-learning/lib/evaluate.mjs` runs `node eval/run.mjs`/`node agent-learning/regress.mjs` as child processes
+  (never a live API, no `.env`) rather than importing this module in-process.
 
 ## Reading `expect`
 
@@ -84,6 +110,33 @@ in the table and does not affect the process exit code; every other scenario fai
 - Every scenario also checks `run.summary.duplicates` (what the Agent mode panel actually renders) against this
   file's own provider-call-based duplicate count and fails if the two disagree — not read from `expect`, applied
   unconditionally in `evaluate()`.
+- `incidents` — `[{family, recoveryStrategy?, recoveryResult?}]` (scenarios 27-32 only): each named family must
+  appear in the run's own incident list; each key given (`recoveryStrategy`, `recoveryResult`) must match, a key
+  omitted from the scenario is not checked.
+- `breakerOpen`: a breaker key (`'stripe:authentication_expired'`, `'dashclaw:dashclaw_unavailable'`,
+  `'model:malformed_model_output'`) that must be open in the runtime's breaker snapshot at the end (scenarios 28,
+  29, 32).
+- `createRefusedCode`: a further `runtime.create()` on the same runtime must throw with this `AppError` code
+  (scenario 32 only: `MODEL_PAUSED`).
+
+## Invariants and incidents in the report
+
+Every scenario's result in `.artifacts/agent-eval.json` (and every regression case's, from `agent-learning/regress.mjs`)
+carries two extra blocks beyond `writes`/`checks`, from `computeInvariants` and the run's own sanitized incidents:
+
+```js
+invariants: {unclaimedWrites, duplicateEffects, incorrectSuccessClaims, unheldFinancialWrites, secretLeaks, injectionAuthorized}
+incidents:  [{family, failureClass, recoveryResult, finalDisposition}]   // one per fault the run recorded
+```
+
+`invariants` is the safety floor the learning loop rejects a candidate on (`docs/AGENT_LEARNING_LOOP.md` section 9,
+`agent-learning/lib/compare.mjs` rule 1): a count above zero here, on a scenario that used to read zero, is an
+automatic rejection whatever else improved. `aggregate()` sums every scenario's `invariants` into the top-level
+`metrics.invariants` object, the same six keys. `incidents` is the sanitized incident list (`sanitizeIncident`,
+`docs/AGENT_SELF_HEALING.md` section 2) a scenario's `expect.incidents` checks against: each entry names the
+`family` string (`<integration>:<failureClass>:<tool>`, for example `hubspot:transient_provider:hubspot.update_customer`
+or `stripe:authentication_expired:stripe.find_customer`) and the `recoveryStrategy`/`recoveryResult` the incident
+ended with.
 
 ## Metrics (contract section 16)
 

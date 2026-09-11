@@ -130,6 +130,12 @@ export function compare(incumbentRecord,candidateRecord,{target={},hypothesis={}
   if(target?.familyKey && !target.devIds?.length && !target.holdoutIds?.length && !target.regressionIds?.length){
     invalidInput('target.familyKey was given with no resolvable ids; pass target.devIds/target.holdoutIds (or the legacy target.regressionIds) explicitly.');
   }
+  // A family that was named but has no dev case at all (its reduction produced only a holdout twin, or none yet) is not
+  // "no target named" — evaluateTarget's own fallback to every dev case would then measure scenarios the hypothesis has
+  // nothing to do with, rejecting a correct fix or promoting on an unrelated case's strength (docs/AGENT_LEARNING_LOOP.md §9).
+  if(target?.familyKey && !target.devIds?.length){
+    invalidInput(`target family "${target.familyKey}" has no dev regression case; nothing names what this candidate is meant to improve.`);
+  }
 
   const decision={
     decision:null, reasons:[], invariantViolations:newInvariantViolations(incumbentRecord,candidateRecord), newFailures:[],

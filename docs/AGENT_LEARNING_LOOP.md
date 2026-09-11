@@ -6,6 +6,43 @@ The runtime heals; it never learns. Learning is an offline loop over the evidenc
 
 Borrowed from Discovery Loop (`C:\Projects\discovery-loop`) and adapted: a frozen incumbent snapshot with a verifiable hash; isolated candidate experiments; a reviewer structurally independent of the generator, with a missing review treated as a rejection; matched comparison on identical cases; hard invariants plus a target metric; a held-out confirmation set asserted absent from every generation prompt; append-only failure history with fingerprints that outlive the prompt window; bounded, allowlisted, redacted next-loop guidance; resume as validation, not replay; the human line drawn at the irreversible action. Left behind on purpose: the scientific benchmark apparatus (seed matrices, median gain, record tables) and Docker workers; Sidelook's candidates are evaluated by the deterministic fixture harness in a git worktree, which is the sandbox the product already has.
 
+## 0. Both loops
+
+Production execution and offline learning are two separate systems that only ever meet at the evidence a run leaves behind. The runtime never reads the learning corpus and no run rewrites itself; a person is the only thing that ever merges a candidate's branch into `main`.
+
+```mermaid
+flowchart TD
+    subgraph PROD["Production execution: every Agent mode run"]
+        direction TB
+        P1["Goal"] --> P2["Plan\n(lib/agent/loop.mjs, planner.mjs)"]
+        P2 --> P3["Governed execution\n(lib/agent/effects.mjs, governed.mjs)"]
+        P3 --> P4["Verification\n(a fresh provider read)"]
+        P4 --> P5["Failure detection\n(classifyFailure, incidents.mjs)"]
+        P5 --> P6["Reconciliation\n(reconcile / recovery policy)"]
+        P6 --> P7["Bounded recovery\n(retry, breaker, resume; recovery.mjs, breakers.mjs, resume.mjs)"]
+        P7 --> P8["Final state\n(completed/partial/blocked/failed/uncertain/cancelled)"]
+        P8 --> P9["Run evidence\n(run file, incident files, eval report)"]
+    end
+
+    subgraph LEARN["Learning loop: offline, run by a person: node agent-learning/learn.mjs"]
+        direction TB
+        L1["Run evidence"] --> L2["Incident extraction\n(intake.mjs, sanitize.mjs)"]
+        L2 --> L3["Retrospective\n(retro.mjs: deterministic stats + model)"]
+        L3 --> L4["Sanitized lessons\n(memory.mjs, assertNoInstruction)"]
+        L4 --> L5["Hypothesis\n(hypotheses.mjs)"]
+        L5 --> L6["Candidate in a worktree\n(candidates.mjs: .worktrees/&lt;id&gt;, isolated, no node_modules link)"]
+        L6 --> L7["Isolated evaluation\n(evaluate.mjs: tests, eval, dev, holdout, no live API)"]
+        L7 --> L8["Independent review\n(review.mjs: a model that is not the generator)"]
+        L8 --> L9["Incumbent comparison\n(compare.mjs: invariants, tests, holdout, target)"]
+        L9 --> L10["Promote or reject"]
+        L10 --> L11["Next loop memory\n(learning-memory.json, next_loop.json)"]
+    end
+
+    P9 -->|"BOUNDARY: the runtime never rewrites itself.\nA person merges a promoted branch."| L1
+    L10 -->|"--promote prints a git merge command;\nit never merges"| BRANCH["A person reviews and merges"]
+    BRANCH -->|"only after a merge does the next\nproduction run see the change"| P2
+```
+
 ## 1. Layout
 
 ```

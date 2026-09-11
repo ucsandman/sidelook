@@ -91,6 +91,28 @@ actually happened after.
 5. **Stop** in the footer, or **Ctrl+Shift+F12**, ends the run; a write already in flight finishes its own
    verification, and nothing new starts.
 
+An operational fault (a timeout, a rate limit, a dead token, a restart) heals itself where it safely can: the
+timeline narrates the recovery as it happens ("Checking previous effects," "Retrying HubSpot safely," "Recovered"),
+a repeated fault pauses that app's dot amber with the reason until it clears on its own, and a run that ends with
+its goal still unmet stays on the record rather than silently retrying something already done.
+
+**Diagnostics**, a button on a finished run's summary block, reveals exactly what went wrong and what Sidelook did
+about it: the incident list (which app, which kind of fault, what recovery was tried, how it ended) and any paused
+app. **Continue**, on a run whose goal is unmet, starts a fresh run that picks up from there: a write already
+verified is never repeated, and a write left uncertain is read back from the provider before anything new happens.
+
+Sidelook does not learn from its own runs while it is running. A separate, offline loop (`agent-learning/`, run
+by a person from a terminal) reads what past runs recorded, turns a repeated failure into a regression test, and,
+given a generator model (`-- --model <id>`, or `--fixtures` for a canned run), tries a fix as an isolated candidate
+that must pass every existing safety check and an independent review before a person can merge it: `npm run
+agent:learn` (add `-- --model <id>` to generate and evaluate a candidate, or `-- --dry-run` to see what it would do
+without changing anything), `npm run verify:learn` (the same loop end to end against a fixed, canned corpus, useful
+as a demo or a CI check), `npm run agent:regress` (just runs the accumulated regression corpus). With no model
+given, bare `npm run agent:learn` stops after hypotheses, memory and the report: it proposes no candidate. Reading
+evidence and proposing hypotheses run on their own regardless; candidate creation, evaluation and review need a
+generator model; only merging a candidate's branch, or any change to the DashClaw policy or the protected
+governance code, needs a person.
+
 [Set it up](docs/HACKATHON_SETUP.md) · [Watch the two-minute demo](docs/HACKATHON_DEMO.md).
 
 ## Models and speed

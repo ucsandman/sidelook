@@ -28,12 +28,15 @@ export function modelIdForProviderModel(providerModel){
 // an optional key; the answer comes from fixtures[stage][key] or fixtures[stage].default. An unknown stage throws so a
 // fixture gap fails loudly instead of the loop silently inventing a candidate from nothing.
 export function createFixtureInference(fixtures={}){
-  return async function inference({stage,key}={}){
+  return async function inference({stage,key,model}={}){
     const forStage=fixtures[stage];
     if(!forStage) throw Object.assign(new Error(`No fixture inference for stage "${stage}".`),{code:'FIXTURE_MISSING'});
     const answer=key!==undefined && forStage[key]!==undefined ? forStage[key] : forStage.default;
     if(answer===undefined) throw Object.assign(new Error(`No fixture inference for stage "${stage}" key "${key}".`),{code:'FIXTURE_MISSING'});
-    return {result:answer,model:'fixture'};
+    // Echo the requested model back as the model actually used: a caller with a per-call override (independentReview,
+    // honouring --review-model) must see that override reflected here the same way the real seam reflects it, or an
+    // independence check reading this seam's own `model` can never tell a reviewer from the generator (docs/AGENT_LEARNING_LOOP.md §10).
+    return {result:answer,model:model || 'fixture'};
   };
 }
 

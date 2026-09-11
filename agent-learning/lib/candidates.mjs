@@ -17,9 +17,14 @@ import {protectedRegionHashes as incumbentRegionHashes,PROTECTED_MARKERS as INCU
 // agent-learning/lib/incumbent.mjs, the one implementation both sides of a comparison use.
 export const PROTECTED_FILES=[
   'lib/agent/governed.mjs','lib/agent/config.mjs','scripts/agent-setup-dashclaw.mjs','.env','.env.*',
-  'package.json','package-lock.json','eval/fake-dashclaw.mjs','eval/fake-providers.mjs','eval/run.mjs','eval/scripted-model.mjs',
+  'package.json','package-lock.json','eval/fake-dashclaw.mjs','eval/fake-providers.mjs','eval/run.mjs','eval/scripted-model.mjs','eval/scenarios.mjs',
   'agent-learning/regressions/holdout/**','agent-learning/regress.mjs','agent-learning/learn.mjs','agent-learning/lib/**','.github/**'
 ];
+// Tests are not banned outright: a policy-table change legitimately moves the rows a snapshot test pins, and the contract
+// (docs/AGENT_SELF_HEALING.md section 3) wants the table, its test and its doc to move together. What protects the gate is
+// that the safety invariants are measured by eval/ (banned above), that compare rejects a candidate whose passing-test
+// count drops, and that every test file a candidate touched is named on its record for the reviewer and the report.
+const TEST_FILE=/^tests\//;
 
 async function loadProtectedDefaults(){
   return {protectedFiles:PROTECTED_FILES,protectedMarkers:INCUMBENT_MARKERS,regionHashes:root=>incumbentRegionHashes(root)};
@@ -121,12 +126,20 @@ export async function createCandidate(params={},options={}){
 
   // From here on, any unexpected throw (a malformed edit that slips past applyEdits' own checks, a filesystem error, …)
   // must not leave an orphan worktree/branch behind, so the rest of the function is wrapped and cleans up before rethrowing.
+  // An `invalid` candidate is the single most likely outcome of a model-authored edit; learn.mjs's own cleanup step skips
+  // `invalid` candidates entirely (the ledger already explains them), so the worktree — and, past the checkout, the branch
+  // — are removed here, before returning, or every failed hypothesis leaks a full checkout under .worktrees/.
+  const cleanupWorktree=(removeBranch=false)=>{
+    try{git(['worktree','remove','--force',worktreePath],{cwd:root});}catch{ /* best effort */ }
+    if(removeBranch) try{git(['branch','-D',branch],{cwd:root});}catch{ /* best effort */ }
+  };
   try{
     const applied=await applyEdits(worktreePath,edits);
     record.filesChanged=applied.filesChanged;
     if(!applied.ok){
       record.status='invalid';
       record.reason=applied.failed.reason;
+      cleanupWorktree();
       return record;
     }
 
@@ -137,6 +150,7 @@ export async function createCandidate(params={},options={}){
         record.status='invalid';
         record.reason='parse_failed';
         record.error=`${file}: ${String(error.message || error).slice(0,500)}`;
+        cleanupWorktree();
         return record;
       }
     }
@@ -150,6 +164,7 @@ export async function createCandidate(params={},options={}){
       record.status='invalid';
       record.reason='commit_failed';
       record.error=String(error.message || error).slice(0,500);
+      cleanupWorktree(true);
       return record;
     }
 
@@ -172,6 +187,7 @@ export async function createCandidate(params={},options={}){
       }
     }
     record.governanceTouch={touched:touchedFiles.length>0 || touchedRegions.length>0,files:touchedFiles,regions:touchedRegions};
+    record.testFilesChanged=applied.filesChanged.filter(file=>TEST_FILE.test(file));
     record.status=record.governanceTouch.touched ? 'needs_human_review' : 'created';
     return record;
   }catch(error){

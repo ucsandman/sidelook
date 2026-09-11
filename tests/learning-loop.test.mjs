@@ -289,3 +289,37 @@ test('a second loop run over the same memory does not propose the rejected hypot
   assert.ok(!summary2.candidates.some(c => c.hypothesisKey === 'reconciliation:blind_retry'));
   assert.ok(!summary2.candidates.some(c => c.hypothesisKey === 'governance:skip_claim'));
 });
+
+// Regression for the finding: learn.mjs minted a fresh lesson id every run (`${learnRunId}_lesson_${i}`) and never sent
+// `lessonsCited`, so mergeMemory's own two-distinct-run confirmation rule (docs/AGENT_LEARNING_LOOP.md §5) never had
+// anything to act on and no lesson could ever leave 'provisional'. The fixture retro answers the same lesson texts every
+// run (agent-learning/fixtures/inference.json), so a re-derived lesson must land on the same memory row twice.
+test('a lesson the retro re-derives across two learning runs is confirmed on the second run, not re-added as a new provisional row', async t => {
+  const dirs = await makeTmpDirs();
+  t.after(() => rm(dirs.base, { recursive: true, force: true }));
+  const devId = await devTargetId();
+
+  await runLoop({
+    root: REPO_ROOT, dryRun: false, fixturesDir: FIXTURES_DIR, maxCandidates: 3,
+    outDir: join(dirs.outDir, 'run1'), memoryPath: dirs.memoryPath, regressionsDir: dirs.regressionsDir, durableDir: dirs.durableDir,
+    createCandidate: makeStubCreateCandidate(), evaluateTree: makeStubEvaluateTree(devId), removeCandidate: noopRemoveCandidate, print: null
+  });
+  const afterFirst = await loadMemory(dirs.memoryPath);
+  const legitimateText = 'Stripe refunds verified cleanly on every observed run; the failure pattern is isolated to the HubSpot update step.';
+  const firstRow = afterFirst.lessons.find(l => l.text === legitimateText);
+  assert.ok(firstRow, 'the legitimate lesson is recorded after the first run');
+  assert.equal(firstRow.status, 'provisional', 'one citing run is not enough to confirm it');
+  const countAfterFirst = afterFirst.lessons.filter(l => l.text === legitimateText).length;
+  assert.equal(countAfterFirst, 1);
+
+  await runLoop({
+    root: REPO_ROOT, dryRun: false, fixturesDir: FIXTURES_DIR, maxCandidates: 3,
+    outDir: join(dirs.outDir, 'run2'), memoryPath: dirs.memoryPath, regressionsDir: dirs.regressionsDir, durableDir: dirs.durableDir,
+    createCandidate: makeStubCreateCandidate(), evaluateTree: makeStubEvaluateTree(devId), removeCandidate: noopRemoveCandidate, print: null
+  });
+  const afterSecond = await loadMemory(dirs.memoryPath);
+  const rowsAfterSecond = afterSecond.lessons.filter(l => l.text === legitimateText);
+  assert.equal(rowsAfterSecond.length, 1, 'the second run updates the same row by its stable id, never adds a second one');
+  assert.equal(rowsAfterSecond[0].id, firstRow.id, 'the id is a stable hash of the lesson text, not tied to either learnRunId');
+  assert.equal(rowsAfterSecond[0].status, 'confirmed', 'two distinct learning runs citing it with evaluation evidence confirms it');
+});

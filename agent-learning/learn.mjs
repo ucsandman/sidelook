@@ -22,6 +22,7 @@ import { evaluateTree as realEvaluateTree } from './lib/evaluate.mjs';
 import { compare } from './lib/compare.mjs';
 import { independentReview, applyReviewDecision } from './lib/review.mjs';
 import { loadMemory, saveMemory, mergeMemory, projectForPrompt } from './lib/memory.mjs';
+import { sanitizeText } from './lib/sanitize.mjs';
 import { buildNextLoop, writeReports } from './lib/report.mjs';
 import { createLearningInference, createFixtureInference, defaultReviewModel } from './lib/inference.mjs';
 
@@ -133,6 +134,7 @@ function resolveTarget(hypothesis, familyMap, corpus) {
   if (!family) return { metric: hypothesis?.metric || 'scenarioSuccessRate' };
   const belongsToFamily = [...corpus.dev, ...corpus.holdout].filter(r => r.family === family.key);
   return {
+    familyKey: family.key,
     devIds: belongsToFamily.filter(r => r.set === 'dev').map(r => r.id),
     holdoutIds: belongsToFamily.filter(r => r.set === 'holdout').map(r => r.id),
     metric: hypothesis?.metric || 'scenarioSuccessRate'
@@ -170,13 +172,11 @@ function wireReviewKey(inference, candidatesById) {
     if (args.stage !== 'review') return inference(args);
     const candidate = candidatesById.get(args.key);
     const hypothesisKey = candidate?.hypothesis?.hypothesisKey || candidate?.hypothesisKey || args.key;
-    const res = await inference({ ...args, key: hypothesisKey });
-    // The fixture seam always answers {model:'fixture'} regardless of the requested review model (createFixtureInference,
-    // lib/inference.mjs), which made independentReview's modelIdsDiffer(usedModel, generatorModel) check false even when
-    // the fixture review approved a candidate — every fixture candidate came back unreviewed (finding: Scenario C never
-    // promotable). Echo the requested model through when the seam's own answer doesn't already carry a useful one, so
-    // review.mjs's independence check compares the model actually requested for review, not the seam's placeholder.
-    return { ...res, model: args.model || res.model };
+    // Never touch the seam's own `model`: review.mjs's independence check must see whatever model the seam actually used,
+    // not what was requested, or a seam that silently ignores its per-call override could make the check pass on the
+    // strength of the request alone (docs/AGENT_LEARNING_LOOP.md §10). The fixture seam itself now echoes the requested
+    // model back as `model` (lib/inference.mjs), which is what makes a fixture review look independent, correctly.
+    return inference({ ...args, key: hypothesisKey });
   };
 }
 
@@ -322,9 +322,13 @@ export async function runLoop(options = {}) {
       missingRegressionCoverage.push({ family: family.key, why: hasBuilderFor(family) ? 'condition not yet met (e.g. attempts not exhausted)' : 'no reduction mapping for this family' });
       continue;
     }
-    const alreadyCovered = [...existingCorpus.dev, ...existingCorpus.holdout, ...newRegressions.dev, ...newRegressions.holdout].some(r => r.fingerprint === reg.fingerprint);
-    if (alreadyCovered) continue;
+    // Dedupe within the set this case would land in, never across dev and holdout: the same family's reduction is
+    // deterministic, so its dev case and its holdout case share one fingerprint on purpose (docs/AGENT_LEARNING_LOOP.md
+    // §8, "a family with two or more cases has a holdout one"). Deduping across both sets left a family whose fingerprint
+    // happened to match an already-committed holdout file with no dev case at all — the one the generator must see.
     const set = assignSet(family, existingCorpus, reg.fingerprint);
+    const alreadyCovered = [...existingCorpus[set], ...newRegressions[set]].some(r => r.fingerprint === reg.fingerprint);
+    if (alreadyCovered) continue;
     const full = { ...reg, set };
     newRegressions[set].push(full);
     existingCorpus[set].push(full);
@@ -510,10 +514,18 @@ export async function runLoop(options = {}) {
       ...(retroResult.retro.next || []).filter(n => !madeThisRun.has(n.hypothesisKey)).map(n => n.hypothesisKey),
       ...candidates.filter(c => c.status === 'rejected' || c.status === 'rejected_by_review').map(c => c.hypothesisKey)
     ];
+    // A lesson is keyed by a stable hash of its own sanitized text, not by learnRunId: the same re-derived lesson must land
+    // on the same memory row across two runs, or it can never gather the two distinct-run citations §5 confirms it on
+    // (finding: a fresh id every run meant no lesson could ever leave 'provisional'). `lessonsCited` names, for every
+    // lesson this run re-derived, the evaluation evidence backing it: this run's own incumbent baseline, the evidence
+    // the retro's stats and lessons were built from (docs/AGENT_LEARNING_LOOP.md §6).
+    const stableLessonId = text => `lesson_${createHash('sha256').update(sanitizeText(text, { maxChars: 240 })).digest('hex').slice(0, 12)}`;
+    const thisRunLessons = (retroResult.retro.lessons || []).map(lesson => ({ ...lesson, id: stableLessonId(lesson.text) }));
     const delta = {
       lastIntakeAt: now().toISOString(),
       loops: [{ learnRunId, at: now().toISOString(), incumbentRevision: incumbent.revision, candidates: candidates.length, promoted: candidates.filter(c => c.status === 'promoted').length, rejected: candidates.filter(c => c.status === 'rejected' || c.status === 'rejected_by_review').length }],
-      lessons: (retroResult.retro.lessons || []).map((lesson, i) => ({ id: `${learnRunId}_lesson_${i}`, text: lesson.text, status: 'provisional', confidence: 'low', provenance })),
+      lessons: thisRunLessons.map(lesson => ({ id: lesson.id, text: lesson.text, status: 'provisional', confidence: 'low', provenance })),
+      lessonsCited: incumbentEval?.evaluationId ? thisRunLessons.map(lesson => ({ id: lesson.id, learnRunId, evaluationId: incumbentEval.evaluationId })) : [],
       failureFamilies: families.map(f => ({ key: f.key, integration: f.integration, failureClass: f.failureClass, tool: f.tool, count: f.count, firstSeen: f.firstSeen, lastSeen: f.lastSeen, status: 'open', regressionIds: [...newRegressions.dev, ...newRegressions.holdout].filter(r => r.family === f.key).map(r => r.id), runIds: f.runIds, incidentIds: f.incidentIds })),
       rejectedStrategies: candidates.filter(c => c.status === 'rejected' || c.status === 'rejected_by_review').map(c => ({ hypothesisKey: c.hypothesisKey, summary: c.hypothesis?.proposedChange || c.hypothesis?.problem || '', reason: c.reason || 'rejected', candidateId: c.candidateId, evaluationId: evaluations.find(e => e.candidateId === c.candidateId)?.evaluationId || null, learnRunId })),
       nextExperiments: (retroResult.retro.next || []).filter(n => !madeThisRun.has(n.hypothesisKey)).map((n, i) => ({ hypothesisKey: n.hypothesisKey, summary: n.proposedChange || n.problem || '', priority: 5 - i, provenance: { ...provenance, source: 'retro' } })),

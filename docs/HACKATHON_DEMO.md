@@ -60,8 +60,8 @@ Set up ahead of time (not on stage): `HACKATHON_FAIL_HUBSPOT_ONCE=1` in `.env`, 
 (`npm run agent:seed -- --reset`) so there is a fresh payment to refund.
 
 Run the same goal string as Demo A and approve the refund again. When the HubSpot row fails, narrate the rows as
-they appear: "HubSpot update failed. Checking previous effects. Stripe refund already verified. Retrying HubSpot.
-HubSpot update verified."
+they appear: "HubSpot update failed. Checking previous effects. Previous Stripe refund verified. Retrying HubSpot
+safely. HubSpot update verified." Then: "Recovered."
 
 Say: "That's the same run recovering: no duplicate refund, no second email, one write retried after Sidelook proved
 the earlier one was untouched."
@@ -85,6 +85,66 @@ matched policy and the reasons on that page.
 
 Close on the summary block: 0 writes verified, 1 blocked, 0 unresolved. Say: "Sidelook decided nothing here.
 DashClaw did, and it's on the record."
+
+## Demo D: a failure becomes a regression, and a candidate gets evaluated (2:00)
+
+Run ahead of time (not on stage):
+
+```
+npm run verify:learn
+```
+
+This runs `node agent-learning/learn.mjs --fixtures agent-learning/fixtures --out .artifacts/agent-learning/verify --max-candidates 3 --verify`
+end to end: five synthetic runs and their incidents, a retrospective from the canned fixture model, three candidates
+each tried in its own git worktree, each evaluated against the fixture suite and compared against the incumbent;
+the one candidate that clears comparison is then independently reviewed.
+Nothing here touches a live run or the main tree. The console prints one line per step, for example:
+
+```
+step 1 of 13: freeze ... revision <12 hex> (working tree dirty; the incumbent is HEAD)
+step 2 of 13: intake ... 5 runs, 3 incidents
+step 3 of 13: reduce ... 1 families, 1 new dev regression(s), 0 new holdout regression(s)
+step 4 of 13: baseline ... <pass>/<total> tests, <pass>/<total> eval, <pass>/<total> dev, <pass>/<total> holdout
+step 5 of 13: retro ... 3 lessons, 3 next experiment(s) (model)
+step 6 of 13: hypothesize ... 3 hypothesis(es), 2 governance-touching
+step 7 of 13: candidates ... 3 created, 2 needs_human_review, 0 invalid
+step 8 of 13: evaluate ... 3 candidate(s) evaluated
+step 9 of 13: compare ... <n>/3 promote_eligible
+step 10 of 13: review ... <n> reviewed, <n> promote_eligible
+step 11 of 13: memory ... 2 lessons, 2 rejected strategies, 1 rejected-memory-item(s)
+step 12 of 13: report ... written to .artifacts/agent-learning/verify
+step 13 of 13: cleanup ... 2 worktree(s) removed, 1 branch(es) kept
+```
+
+`--verify` then checks the run's own records against `agent-learning/learn.mjs`'s `verifyFixtureSummary()` and prints
+one line: `verify:learn passed: Scenario C promote_eligible, D and D2 rejected as expected, Scenario E lesson
+refused.` A failing check names the exact assertion that did not hold, never a bare exit code.
+
+Open `.artifacts/agent-learning/verify/learning_report.md` on screen and narrate straight down it:
+
+- **What happened.** "Five runs and three incidents read, reduced to one failure family: HubSpot transient failures
+  that exhausted the retry budget. One new dev regression scenario was written from that family. Three candidates
+  were tried this run."
+- **What failed.** The two rejected candidates and their reasons, read straight from the file.
+- **Candidates tried.** Three rows: `recovery_policy:transient_provider:max_attempts_4` (raises the HubSpot retry
+  budget from 3 to 4 attempts), `reconciliation:blind_retry` (skips the reconciliation read on a lost response and
+  retries directly), `governance:skip_claim` (skips the DashClaw execution claim). Say: "One candidate raises a
+  number. The other two are exactly the kind of shortcut that looks like a fix and is actually a safety hole, and
+  the loop is built to catch both of them by name."
+- **Safety checks that ran.** `compare.mjs`'s six zero-tolerance invariants (`unclaimedWrites, unheldFinancialWrites,
+  duplicateEffects, incorrectSuccessClaims, secretLeaks, injectionAuthorized`), checked across every eval, dev
+  and holdout case (the test suite contributes pass/fail only). `reconciliation:blind_retry` trips `duplicateEffects` the moment it skips the reconciliation
+  read: a second refund shows up where only one should. `governance:skip_claim` trips `unclaimedWrites` the moment
+  it skips the DashClaw claim, and it also touched a protected region of `lib/agent/effects.mjs`, so its record
+  carries `governanceTouch:true` on top of the rejection. Say: "The loop doesn't have to know these are dangerous
+  in advance. It runs the same eval suite everything else runs, and a write that shouldn't have happened twice,
+  or that happened with no governance record, fails the same invariant a live run would fail."
+
+Switch to the panel. Open a run that ended `partial` (Demo B with a HubSpot outage that never recovered works, or
+scenario 30's setup by hand). Press **Diagnostics**: the incident list names the failure class, the recovery
+strategy that was tried, and how it ended; the breaker table shows anything still paused. Press **Continue**: say
+"This is the online half of the same idea. Nothing here rewrites Sidelook's code. It reads what already happened
+and picks up from the earliest thing that isn't proven yet, never repeating a write that already went through."
 
 ## Between demo runs
 

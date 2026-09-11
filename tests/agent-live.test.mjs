@@ -17,12 +17,19 @@ import {executeWrite} from '../lib/agent/effects.mjs';
 const ENABLED=process.env.RUN_LIVE_AGENT_TESTS==='1';
 const SKIP_REASON="Set RUN_LIVE_AGENT_TESTS=1 to run the live Agent mode tests against real Slack/Stripe/HubSpot/Gmail/DashClaw.";
 
-const config=loadConfig();
-const providers=createProviders({config});
-const governed=createGoverned({config});
+// loadConfig() (with its default loadFile:true) can fall back to a real .env beside a packaged install on this machine
+// (%LOCALAPPDATA%\Sidelook\.env). A skipped test must not read that file: every test below skips at the top of its own
+// body, but a module-scope call here ran regardless, on every `node --test`, whether or not RUN_LIVE_AGENT_TESTS is set —
+// including inside the learning loop's sandboxed evaluation child, which allowlists exactly the env vars that path reads.
 const STRIPE_BASE='https://api.stripe.com';
-const stripeAuth={Authorization:`Bearer ${config.stripe.secretKey}`};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+let config,providers,governed,stripeAuth;
+if(ENABLED){
+  config=loadConfig();
+  providers=createProviders({config});
+  governed=createGoverned({config});
+  stripeAuth={Authorization:`Bearer ${config.stripe.secretKey}`};
+}
 
 test('health: all five integrations are ready',async t=>{
   if(!ENABLED) return t.skip(SKIP_REASON);

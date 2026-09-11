@@ -70,6 +70,10 @@ a second refund. Both are handled once, in `lib/agent/effects.mjs`, for every wr
 | `lib/agent/redact.mjs` | Secret patterns scrubbed from anything stored or emitted; defense in depth, not the only barrier. |
 | `lib/agent/config.mjs` | Loads `.env` (Agent mode is the only surface that reads it), classifies the Stripe key test/live, carries the failure-injection flags. |
 | `lib/agent/health.mjs` | Probes all five integrations in parallel, bounded to 6s each, never throws. |
+| `lib/agent/incidents.mjs` | One typed record per operational fault: classification, the run's incident ledger, one file per incident on disk. |
+| `lib/agent/recovery.mjs` | The recovery policy table: what a failed read or write may do next, per failure class. Nothing else decides a retry. |
+| `lib/agent/breakers.mjs` | Circuit breakers per integration and failure class, snapshotted to disk; refuses a call before it is made while open. |
+| `lib/agent/resume.mjs` | Resume from persisted evidence after a restart; builds the lineage a continued run inherits. |
 | `lib/agent/index.mjs` | The `AgentRuntime`: one per process, owns every run, the only thing `/api/agent` talks to. |
 | `lib/agent/providers/{slack,stripe,hubspot,gmail}.mjs` | Typed adapters: request building, response parsing, provider idempotency, reconciliation reads. |
 | `server.mjs` (`/api/agent` route) | Relays operations to the runtime and streams run snapshots (ndjson); same Host/Origin/session checks as every other route. |
@@ -168,3 +172,15 @@ Installed by `npm run agent:setup-dashclaw` (`scripts/agent-setup-dashclaw.mjs`)
 | `sidelook-agent: writes carry evidence` | `require_evidence` | `action_types: ['api','email']`, block otherwise | A declaration with no `act` attached is blocked. |
 
 Reads never reach DashClaw; they stay in Sidelook's own trace. Full contract: `docs/AGENT_MODE_IMPLEMENTATION.md`.
+
+## The learning loop is a separate system
+
+`agent-learning/` is an offline loop over the runtime's own evidence (run files, incident files, the eval report),
+run by a person with `node agent-learning/learn.mjs`. It shares no process, no code path and no run state with the
+five layers above: it never touches a running run's in-memory state, reads Sidelook's live source only to freeze a
+hash of HEAD and to give the generator the text of the files a hypothesis names, proposes edits inside its own
+isolated git worktrees, and never talks to DashClaw. It reads evidence,
+proposes a change as a candidate branch, evaluates that candidate against a frozen incumbent and a held-out
+regression corpus with the same fixture harness the eval suite uses, and prints a `git merge` command for a person
+to run; it never merges anything itself, and a live Agent mode run never invokes it. Full contract:
+`docs/AGENT_LEARNING_LOOP.md`.
