@@ -15,6 +15,14 @@
 - The five browser verifiers write their PNGs into `.artifacts/`; reading those images after each run caught four polish
   defects the assertions cannot see (a wrapped control row, a 4px seam mismatch, a squeezed timeline label, an upright
   serif in a UI label). The screenshots are part of the check, not a by-product.
+- The overhaul shipped three times before anyone looked at the published captures. `docs/images/streaming.png`,
+  `companion.png` and `computer.png` sit on the README and on the site's walkthrough, and all three were still the
+  0.15.0 graphite panel: one of them said "Ask Jarvis", a name the product dropped at 0.16.0. Nothing catches this,
+  because the verifiers assert the image's `src` and its HTTP status, never its age. The fix was free: the same
+  verifiers already write the right frames at the right sizes into `.artifacts/` on every run, so a UI change ends
+  by copying stream-desktop, companion-desktop and computer-desktop over the published files and rebuilding the
+  social card. A capture on a public page is a surface, and a surface drifts unless the change that moved it also
+  moves the picture.
 
 ## 2026-09-11: Self healing and the Agent Learning Loop
 
