@@ -149,5 +149,6 @@ export function initComputer({api,getSelection,onState}) {
   });
   $('reject').onclick=()=>work(async signal=>{await call('reject',{},signal);clearProposal();status('Action rejected. Nothing more is planned until you press Plan next action.');});
   window.addEventListener('pagehide',()=>{controller?.abort();if(owner)api('/api/computer',{op:'stop'},undefined,true).catch(()=>{});});
+  let scrolled=false;$('body').addEventListener('scroll',()=>{const s=$('body').scrollTop>0;if(s!==scrolled){scrolled=s;$('head').classList.toggle('scrolled',s);}},{passive:true});
   controls();return {state:()=>({on:!!owner,planning}),open};
 }

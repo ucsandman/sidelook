@@ -13,7 +13,9 @@ Navy and teal, the Practical Systems family palette (family values from `C:\Proj
 | `--muted` | `#A3ADBD` / `#B3BCCA` | Secondary text. 7:1+ on the app body, 4.5:1+ on the site body |
 | `--accent` | `#2DD4A8` Teal | The accent. Hover `--accent-hover` `#4EE0B8`. Text on it is `--on-accent` `#0B1F1A` |
 | `--paper` | `#F8FAFC` | Prototype preview background |
+| `--chrome` | `#D7DAE3` | The one grey for both preview bars. Text on it: `#3A4256` primary, `#4A5470` secondary, `#252A36` the active viewport |
 | `--green` | `#10B981` Emerald | Ready state only |
+| `--warn` | `#F2B49E` | Errors, paused breakers, warn dots, an unverified outcome |
 | `--hub` | `#FFFFFF` | The mark's hexagon |
 
 The long tail of studio shades in `style.css` was retinted by rule (hue 200 shades moved to hue 224 at the same lightness), so every surface keeps its relative depth. No gradients on text. No side-stripe borders (`border-left` accents). Grey text never sits on the accent; use `--on-accent`. The dock button (`desktop/SidelookMark.cs`), the exe icon (`scripts/build-icon.ps1`) and the WebView backdrop carry the same two values: Navy `23,29,45` and Teal `45,212,168`.
@@ -31,7 +33,9 @@ One node of the Practical Systems mark. On a 64 grid: a rounded square of Navy (
 
 ## Spacing and layout
 
-Site max width 1360px with 48px gutters (24px under 900px). Section padding 56-80px, one dominant idea per section. Two-column grids collapse to one at 900px; the walkthrough tabs go 4-up to 2-up at 620px. App shell max width 1800px, 40px gutters.
+Site max width 1360px with 48px gutters (24px under 900px). Section padding 56-80px, one dominant idea per section. Two-column grids collapse to one at 900px; the walkthrough tabs go 4-up to 2-up at 620px. The studio is three welded regions (a 48px toolbar, the panes, a 64px versions deck) whose 1px seams run edge to edge with no shell padding; 16px page gutters appear only at 900px and below.
+
+Radius means a thing floats. 0 is welded: the studio panes, their seams, the deck, the viewfinder, the starters and the rule-separated steps in Computer mode. 3 is a tag or a tile, 5 a field or a button, 6 an artifact or a block of evidence, 8 a dialog or the expanded stage, 9 to 12 the things that hover: decision cards, message bubbles, the panel itself. 999 is a pill. The only rounded thing inside the studio is the artifact.
 
 ## Motion
 

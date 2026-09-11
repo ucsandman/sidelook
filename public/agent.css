@@ -1,9 +1,12 @@
 /* Agent mode: a screen, not a card. It takes the body and the box; the header stays, like Computer mode. */
 #companion.agent .companion-scroll,#companion.agent .companion-compose{display:none}
 #agent-mode{display:flex;flex-direction:column;flex:1;min-height:0}
-.agent-head{display:flex;align-items:center;gap:6px;padding:0 16px 8px 8px;flex-shrink:0}
+.agent-head{display:flex;align-items:center;gap:6px;min-height:36px;padding:0 16px 8px 8px;flex-shrink:0;position:relative}
+.agent-head::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);opacity:0;transition:opacity .2s var(--ease)}
+.agent-head.scrolled::after{opacity:1}
 .agent-head strong{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-#agent-status{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;text-transform:capitalize}
+#agent-status{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap;text-transform:lowercase}
+#agent-status::first-letter{text-transform:uppercase}
 .agent-lineage{margin:-4px 16px 6px 8px;font-size:12px;color:var(--muted);flex-shrink:0}
 .agent-body{overflow:auto;flex:1;min-height:0;padding:4px 16px 12px;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 #agent-goal{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 10px}
@@ -11,45 +14,47 @@
 .agent-app{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .agent-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .2s var(--ease)}
 .agent-app.accent .agent-dot{background:var(--accent)}
-.agent-app.warn .agent-dot{background:#f2b49e}
+.agent-app.warn .agent-dot{background:var(--warn)}
 .agent-app.muted .agent-dot{background:var(--muted)}
-.agent-breakers{list-style:none;margin:-4px 16px 6px 8px;padding:0;font-size:12px;color:#f2b49e;display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.agent-breakers{list-style:none;margin:-4px 16px 6px 8px;padding:0;font-size:12px;color:var(--warn);display:flex;flex-direction:column;gap:2px;flex-shrink:0}
 #agent-model-line{font-size:12px;color:var(--muted);margin:0 0 10px;line-height:1.45}
 #agent-model-line b{color:var(--ink);font-weight:500}
 .agent-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-#agent-mode .button.amber{background:var(--accent);color:var(--on-accent);font-weight:600;padding:8px 14px;border-radius:9px;font-size:14px}
+#agent-mode .button.amber{background:var(--accent);color:var(--on-accent);font-weight:600;min-height:40px;padding:0 14px;border-radius:9px;font-size:14px}
 #agent-mode .button.amber:hover:not(:disabled){background:var(--accent-hover)}
-#agent-error{color:#f2b49e;font-size:12px;margin:8px 0 0}
+#agent-error{color:var(--warn);font-size:12px;margin:8px 0 0}
 #agent-timeline{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .agent-row-item{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;font-size:13px}
 .agent-row-model{color:var(--muted)}
 .agent-glyph{font-size:13px;width:14px;text-align:center;flex-shrink:0}
 .agent-glyph-verified{color:var(--accent)}
 .agent-glyph-ok{color:var(--muted)}
-.agent-glyph-blocked,.agent-glyph-rejected,.agent-glyph-failed{color:#f2b49e}
+.agent-glyph-blocked,.agent-glyph-rejected,.agent-glyph-failed{color:var(--warn)}
 .agent-glyph-started,.agent-glyph-pending,.agent-glyph-unverified,.agent-glyph-uncertain,.agent-glyph-info{color:var(--muted)}
 .agent-tag{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
 .agent-event-label{flex:1;min-width:140px}
-.agent-event-detail{color:var(--muted);font-size:12px;flex-basis:100%}
-#agent-timeline .agent-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0}
+.agent-event-detail{color:var(--muted);font-size:12px;flex:1 1 0;min-width:70%}
+#agent-timeline .agent-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0;margin-left:auto}
 #agent-timeline .agent-reveal[aria-expanded=true]{color:var(--ink)}
-#agent-timeline pre{max-height:200px;overflow:auto;font-size:12px;line-height:1.45;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:2px 0 0;white-space:pre-wrap;flex-basis:100%}
+#agent-timeline pre{margin:2px 0 0;flex-basis:100%}
 /* The accent border is the one place on the screen that means "a person must decide now"; a card that only reports
    (clarify, summary) gets the plain line rule and no filled background so it reads calmer than the approval card. */
-#agent-approval{border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--panel)}
-#agent-clarify,#agent-summary{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-#agent-approval h3,#agent-clarify h3{font:500 15px/1.3 'Segoe UI',sans-serif;margin:0 0 8px}
-#agent-approval-fields{margin:0 0 10px;font-size:13px}
-#agent-approval-fields dt{color:var(--muted);font-size:12px;margin-top:8px}
-#agent-approval-fields dt:first-child{margin-top:0}
-#agent-approval-fields dd{margin:2px 0 0;color:var(--ink)}
+#agent-approval,#agent-clarify{border:1px solid var(--accent);border-radius:10px;padding:12px 14px;background:var(--panel)}
+#agent-summary{border:0;border-top:1px solid var(--line);border-radius:0;padding:12px 0 0}
+#agent-approval h3,#agent-clarify h3{font:400 12px/1.45 'Segoe UI',sans-serif;color:var(--muted);margin:0 0 4px}
+#agent-approval-line{font:500 16px/1.3 'Segoe UI',sans-serif;color:var(--ink);margin:0;overflow-wrap:anywhere}
+.agent-decision-head{position:sticky;top:0;z-index:1;background:var(--panel);margin:-12px -14px 0;padding:12px 14px 8px;border-radius:9px 9px 0 0}
+#agent-approval-fields{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 12px;margin:10px 0;font-size:13px}
+#agent-approval-fields dt{color:var(--muted);font-size:12px;margin:0;padding-top:1px}
+#agent-approval-fields dd{margin:0;color:var(--ink);font-variant-numeric:tabular-nums}
 #agent-approval-fields ul{margin:2px 0 0;padding-left:18px;color:var(--ink)}
 .agent-evidence-ref{display:block;color:var(--muted);font-size:12px;margin-top:1px}
-#agent-decide-by{font-size:12px;color:var(--muted);margin:0 0 10px}
-#agent-question{margin:0 0 8px;font-size:13px}
+#agent-approval .agent-row,#agent-clarify .agent-row{position:sticky;bottom:0;z-index:1;background:var(--panel);margin:0 -14px -12px;padding:10px 14px 12px;border-top:1px solid var(--line);border-radius:0 0 9px 9px}
+#agent-decide-by{font-size:12px;color:var(--muted);margin:0 0 0 auto;font-variant-numeric:tabular-nums}
+#agent-question{font:500 15px/1.35 'Segoe UI',sans-serif;margin:0 0 8px}
 #agent-answer-text{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 8px}
 #agent-summary-line{font-size:14px;font-weight:500;margin:0 0 10px}
-#agent-effects{list-style:none;margin:0 0 10px;padding:0;font-size:13px;color:var(--muted)}
+#agent-effects{list-style:none;margin:0 0 10px;padding:0;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 #agent-effects li{margin:2px 0}
 #agent-resume{font-size:12px;color:var(--muted);margin:0 0 10px}
 #agent-summary .agent-row{margin:0 0 8px}
@@ -59,7 +64,13 @@
 #agent-closing{font-size:12px;color:var(--muted);margin:0 0 6px}
 #agent-final{font-size:12px;color:var(--muted);margin:0}
 #agent-final b{color:var(--ink);font-weight:500}
-.agent-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0}
+.agent-again{display:none;font-size:12px;color:var(--muted);margin:0 0 8px}
+#agent-run:not([hidden])+#agent-start{border-top:1px solid var(--line);padding-top:12px}
+#agent-run:not([hidden])+#agent-start .agent-again{display:block}
+#agent-run:has(#agent-continue:not([hidden]))+#agent-start #agent-start-button{background:#2f3443;color:var(--ink)}
+#agent-run:has(#agent-continue:not([hidden]))+#agent-start #agent-start-button:hover:not(:disabled){background:#363c4e}
+#agent-mode:has(#agent-run[hidden]) #agent-stop{display:none}
+.agent-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0;min-height:44px}
 #companion #agent-stop{background:#2b313f;color:var(--ink);padding:7px 14px;font-weight:500}
 #companion #agent-stop:hover:not(:disabled){background:#363c4e}
 @media(prefers-reduced-motion:reduce){#agent-mode *{transition:none!important;animation:none!important}}

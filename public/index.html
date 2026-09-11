@@ -33,9 +33,6 @@
       <span class="toolbar-title">Studio</span>
       <div class="toolbar-actions">
         <button class="quiet" id="chat-toggle" aria-expanded="false" aria-controls="companion">Chat</button>
-        <button class="button amber" id="share-screen">Share<span class="toolbar-wide"> window</span></button>
-        <button class="button secondary" id="live-start">Live<span class="toolbar-wide"> build</span></button>
-        <button class="button secondary" id="live-pause" hidden>Live <span id="live-count">0 / 10 builds</span> · Pause</button>
         <button class="quiet model-menu" id="model-menu" aria-label="Model and effort, opens Settings"><span class="status-dot" id="provider-dot"></span><span id="provider-status">Checking connection</span><span aria-hidden="true">▾</span></button>
         <button class="icon-button" id="settings-open" aria-label="Settings" title="Settings">⚙</button>
       </div>
@@ -43,59 +40,63 @@
 
     <main class="studio">
       <section class="rail" aria-label="Direction and reference">
-        <div class="chip-row" id="rail-chips" aria-label="Prewritten directions"></div>
-        <form id="composer" class="composer">
-          <div class="frame-chip" id="frame-chip" hidden><img id="frame-chip-image" alt="Exact frame attached to the next build"><span><b id="frame-chip-label"></b><small>Goes with this build</small></span><button type="button" id="frame-remove" aria-label="Remove frame">×</button></div>
-          <div class="composer-row"><button type="button" class="mic-button" id="mic" aria-label="Dictate direction" aria-pressed="false"><svg><use href="#i-mic"/></svg></button><label class="sr-only" for="direction">Tell Sidelook what to build or change</label><textarea id="direction" rows="2" maxlength="4000" placeholder="Tell me what to build, or what to change…"></textarea></div>
-          <div class="send-gate" id="build-gate"><span class="consent-line" id="build-consent-line">Send this direction to Astra (your ChatGPT subscription).</span><button type="button" class="quiet" id="build-preview">See exactly what goes</button><p class="billing" id="build-billing" hidden></p></div>
-          <div class="composer-actions"><span id="activity">Ready</span><button class="button amber build-button" id="build" type="submit"><span id="build-label">Build</span> <svg><use href="#i-arrow"/></svg></button></div>
-        </form>
-        <div class="error-banner" id="error" role="alert" hidden><span id="error-text"></span><button class="quiet" id="reconnect">Reconnect</button><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
-
-        <div class="viewfinder" id="viewfinder">
-          <video id="camera" autoplay muted playsinline hidden></video>
-          <img id="reference" alt="The reference frame being used by Sidelook" hidden>
-          <div id="annotations" class="annotations" aria-hidden="true"></div>
-          <div class="viewfinder-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-          <div class="camera-empty" id="camera-empty">
-            <div class="aperture" aria-hidden="true"><div></div><span></span></div>
-            <h2>Share the window you're designing in.</h2>
-            <p>Camera and image upload work too.</p>
-            <span class="local-note">Preview stays on this device.</span>
+        <div class="pane pane-direction" aria-label="Direction">
+          <div class="chip-row" id="rail-chips" aria-label="Prewritten directions"></div>
+          <form id="composer" class="composer">
+            <div class="frame-chip" id="frame-chip" hidden><img id="frame-chip-image" alt="Exact frame attached to the next build"><span><b id="frame-chip-label"></b><small>Goes with this build</small></span><button type="button" id="frame-remove" aria-label="Remove frame">×</button></div>
+            <div class="composer-row"><button type="button" class="mic-button" id="mic" aria-label="Dictate direction" aria-pressed="false"><svg><use href="#i-mic"/></svg></button><label class="sr-only" for="direction">Tell Sidelook what to build or change</label><textarea id="direction" rows="2" maxlength="4000" placeholder="Tell me what to build, or what to change…"></textarea></div>
+            <div class="send-gate" id="build-gate"><span class="consent-line" id="build-consent-line">Send this direction to Astra (your ChatGPT subscription).</span><button type="button" class="quiet" id="build-preview">See exactly what goes</button><p class="billing" id="build-billing" hidden></p></div>
+            <div class="composer-actions"><span id="activity">Ready</span><button class="button amber build-button" id="build" type="submit"><span id="build-label">Build</span> <svg><use href="#i-arrow"/></svg></button></div>
+          </form>
+          <div class="error-banner" id="error" role="alert" hidden><span id="error-text"></span><button class="quiet" id="reconnect">Reconnect</button><button id="dismiss-error" aria-label="Dismiss error">×</button></div>
+        </div>
+        <div class="pane pane-reference" aria-label="Reference">
+          <details id="sent-evidence" class="sent-evidence" hidden><summary id="sent-label">Last frame sent</summary><img id="sent-image" alt="Exact screen snapshot sent with the latest build"></details>
+          <div class="viewfinder" id="viewfinder">
+            <video id="camera" autoplay muted playsinline hidden></video>
+            <img id="reference" alt="The reference frame being used by Sidelook" hidden>
+            <div id="annotations" class="annotations" aria-hidden="true"></div>
+            <div class="viewfinder-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="camera-empty" id="camera-empty">
+              <div class="aperture" aria-hidden="true"><div></div><span></span></div>
+              <h2>Share the window you're designing in.</h2>
+              <p>Camera and image upload work too.</p>
+              <span class="local-note">Preview stays on this device.</span>
+            </div>
+            <span class="frame-label" id="frame-label" hidden></span>
+            <div class="frame-tools" id="frame-tools" hidden><button class="small-button" id="resume">Back to live view</button><button class="small-button" id="clear-reference">Clear image</button></div>
+            <div class="frame-tools frame-attach" id="frame-attach" hidden><button class="small-button attach-button" id="use-frame">Use this frame</button></div>
+            <div class="scan-line" aria-hidden="true"></div>
           </div>
-          <span class="frame-label" id="frame-label" hidden></span>
-          <div class="frame-tools" id="frame-tools" hidden><button class="small-button" id="resume">Back to live view</button><button class="small-button" id="clear-reference">Clear image</button></div>
-          <div class="frame-tools frame-attach" id="frame-attach" hidden><button class="small-button attach-button" id="use-frame">Use this frame</button></div>
-          <div class="scan-line" aria-hidden="true"></div>
-        </div>
-        <p class="source-status" id="source-status">Camera off</p>
-        <div class="source-controls">
-          <button class="quiet" id="connect" aria-label="Connect camera"><svg><use href="#i-camera"/></svg> Camera</button>
-          <button class="quiet" id="upload"><svg><use href="#i-upload"/></svg> Upload</button>
-          <button class="quiet" id="example" aria-label="Try a sample sketch">Sample sketch</button>
-          <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
-        </div>
-        <div class="camera-controls" id="camera-controls" hidden><label for="camera-select">Camera</label><select id="camera-select" aria-label="Choose camera"></select><button class="quiet" id="camera-off">Turn off</button></div>
-
-        <section class="live-controls" id="live-controls" aria-label="Live build" hidden>
-          <div class="live-heading"><strong>Live build</strong></div>
-          <p>After 3 quiet seconds Sidelook sends one changed snapshot and updates the prototype.</p>
-          <label for="live-interval">Minimum time between builds <select id="live-interval"><option value="30000">30 seconds</option><option value="60000">60 seconds</option><option value="120000">2 minutes</option></select></label>
-          <div class="live-actions"><button class="quiet" id="screen-stop">Stop sharing</button></div>
-          <p id="live-status" role="status">Sharing locally. No automatic frames sent.</p>
-        </section>
-        <details id="sent-evidence" class="sent-evidence" hidden><summary id="sent-label">Last frame sent</summary><img id="sent-image" alt="Exact screen snapshot sent with the latest build"></details>
-        <div class="understanding">
-          <p class="observation-time" id="observation-time">No frame sent yet</p>
-          <p id="observation-summary">I’ll read the details, connect them to your direction, and build from there.</p>
-          <ol class="observation-list" id="observations"></ol>
+          <p class="source-status" id="source-status">Camera off</p>
+          <div class="source-controls">
+            <button class="quiet" id="share-screen"><svg><use href="#i-screen"/></svg> Share window</button>
+            <button class="quiet" id="connect" aria-label="Connect camera"><svg><use href="#i-camera"/></svg> Camera</button>
+            <button class="quiet" id="upload"><svg><use href="#i-upload"/></svg> Upload</button>
+            <button class="quiet" id="example" aria-label="Try a sample sketch">Sample sketch</button>
+            <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
+            <button class="quiet live-toggle" id="live-start">Live build</button>
+            <button class="quiet live-toggle" id="live-pause" hidden>Live <span id="live-count">0 / 10 builds</span> · Pause</button>
+          </div>
+          <div class="camera-controls" id="camera-controls" hidden><label for="camera-select">Camera</label><select id="camera-select" aria-label="Choose camera"></select><button class="quiet" id="camera-off">Turn off</button></div>
+          <section class="live-controls" id="live-controls" aria-label="Live build" hidden>
+            <div class="live-heading"><strong>Live build</strong></div>
+            <p>After 3 quiet seconds Sidelook sends one changed snapshot and updates the prototype.</p>
+            <label for="live-interval">Minimum time between builds <select id="live-interval"><option value="30000">30 seconds</option><option value="60000">60 seconds</option><option value="120000">2 minutes</option></select></label>
+            <div class="live-actions"><button class="quiet" id="screen-stop">Stop sharing</button></div>
+            <p id="live-status" role="status">Sharing locally. No automatic frames sent.</p>
+          </section>
+          <div class="understanding" id="understanding" hidden>
+            <p class="observation-time" id="observation-time">No frame sent yet</p>
+            <p id="observation-summary">I’ll read the details, connect them to your direction, and build from there.</p>
+            <ol class="observation-list" id="observations"></ol>
+          </div>
         </div>
       </section>
 
       <section class="stage" aria-label="Running prototype">
-        <div class="build-overlay" id="build-overlay" hidden><div class="build-orbit" aria-hidden="true"></div><span class="build-phase" id="build-phase" role="status">Reading your reference</span><h2 id="build-message" aria-live="polite">Connecting the dots.</h2><p id="build-detail">Looking at the frame you chose.</p><p id="build-elapsed">0s elapsed</p><button class="small-button" id="cancel">Cancel</button></div>
         <div class="prototype" id="prototype">
-          <div class="browser-bar"><div class="browser-dots" aria-hidden="true"><i></i><i></i><i></i></div><span id="prototype-title">Your next idea, running.</span><span class="version-label" id="version-label">No version yet</span><div class="preview-actions"><button id="desktop-view" class="viewport-button active" aria-label="Desktop preview" aria-pressed="true">Desktop</button><button id="mobile-view" class="viewport-button" aria-label="Mobile preview" aria-pressed="false">Mobile</button><button class="icon-button small" id="expand" aria-label="Expand preview"><svg><use href="#i-expand"/></svg></button></div></div>
+          <div class="browser-bar"><span id="prototype-title">Your next idea, running.</span><span class="version-label" id="version-label">No version yet</span><div class="preview-actions"><button id="desktop-view" class="viewport-button active" aria-label="Desktop preview" aria-pressed="true">Desktop</button><button id="mobile-view" class="viewport-button" aria-label="Mobile preview" aria-pressed="false">Mobile</button><button class="icon-button small" id="expand" aria-label="Expand preview"><svg><use href="#i-expand"/></svg></button></div></div>
           <div id="draft-controls" class="draft-controls" hidden><strong id="draft-status" role="status">Live draft · unfinished</strong><div><button class="small-button" id="show-draft" aria-pressed="true">Live draft</button><button class="small-button" id="show-working" aria-pressed="false">Last working version</button></div><p>Layout updates as code arrives. Draft scripts stay off until the finished version is ready.</p><details><summary>Code arriving</summary><pre id="draft-code"></pre></details></div>
           <div class="preview-stage" id="preview-stage">
             <div class="preview-empty" id="preview-empty">
@@ -108,11 +109,14 @@
           </div>
           <div class="prototype-footer"><span id="preview-note">A real preview will appear here.</span><button class="quiet" id="retry-preview" hidden>Retry preview</button><div><button class="quiet" id="source" disabled><svg><use href="#i-code"/></svg> Source</button><button class="quiet" id="download" disabled><svg><use href="#i-download"/></svg> Download</button></div></div>
         </div>
-        <section class="reply" aria-label="Sidelook reply"><img class="reply-mark" src="/mark.svg" width="27" height="27" alt="" aria-hidden="true"><div><div class="reply-byline">Sidelook <span id="reply-status">Standing by</span></div><p id="reply-text" aria-live="polite">Show me a sketch and tell me what should work. I’ll take it from there.</p><ul id="changes"></ul></div></section>
-        <div class="revision-heading"><span id="revision-count">Every build keeps the previous version.</span><button class="quiet" id="new-session">New project</button></div>
-        <nav class="revisions" id="revisions" aria-label="Revision history"><p class="revision-empty">Your first version starts with an idea.</p></nav>
+        <section class="reply" aria-label="Sidelook reply"><div class="reply-scroll"><img class="reply-mark" src="/mark.svg" width="27" height="27" alt="" aria-hidden="true"><div><div class="reply-byline">Sidelook <span id="reply-status">Standing by</span></div><p id="reply-text" aria-live="polite">Show me a sketch and tell me what should work. I’ll take it from there.</p><ul id="changes"></ul></div></div><div class="build-overlay" id="build-overlay" hidden><div class="build-orbit" aria-hidden="true"></div><span class="build-phase" id="build-phase" role="status">Reading your reference</span><h2 id="build-message" aria-live="polite">Connecting the dots.</h2><p id="build-detail">Looking at the frame you chose.</p><p id="build-elapsed">0s elapsed</p><button class="small-button" id="cancel">Cancel</button></div></section>
       </section>
     </main>
+    <footer class="deck" aria-label="Versions">
+      <span id="revision-count">Every build keeps the previous version.</span>
+      <nav class="revisions" id="revisions" aria-label="Revision history"><p class="revision-empty">Your first version starts with an idea.</p></nav>
+      <button class="quiet" id="new-session">New project</button>
+    </footer>
   </div>
 
   <section id="companion" aria-label="Sidelook companion">
@@ -146,12 +150,12 @@
     <div class="companion-edges" aria-hidden="true"><i data-edge="top"></i><i data-edge="bottom"></i><i data-edge="left"></i><i data-edge="right"></i></div>
     <section id="computer-mode" class="computer-mode" aria-label="Computer mode" hidden>
       <div id="computer-work" hidden>
-        <div class="computer-head"><button type="button" class="quiet" id="computer-back">‹ Back</button><strong id="computer-title">Computer mode</strong><span id="computer-left"></span></div>
-        <div class="computer-body">
+        <div class="computer-head" id="computer-head"><button type="button" class="quiet" id="computer-back">‹ Back</button><strong id="computer-title">Computer mode</strong><span id="computer-left"></span></div>
+        <div class="computer-body" id="computer-body">
           <div class="computer-step">
             <div class="computer-lbl">1 · The window</div>
             <div class="computer-row"><select id="computer-window" aria-label="Window"><option value="">Choose a window</option></select><button type="button" class="quiet" id="computer-refresh">Refresh</button><button type="button" class="quiet" id="computer-inspect">Read it</button></div>
-            <div class="computer-row"><span>or open</span><select id="computer-app" aria-label="App to open"><option value="notepad">Notepad</option><option value="calculator">Calculator</option><option value="paint">Paint</option></select><button type="button" class="quiet" id="computer-launch">Open</button></div>
+            <div class="computer-row computer-launch"><span>or open</span><select id="computer-app" aria-label="App to open"><option value="notepad">Notepad</option><option value="calculator">Calculator</option><option value="paint">Paint</option></select><button type="button" class="quiet" id="computer-launch">Open</button></div>
           </div>
           <div class="computer-step">
             <div class="computer-lbl">2 · The task</div>
@@ -160,39 +164,25 @@
             <div class="computer-goes" id="computer-gate"><span class="consent-line" id="computer-consent-line"></span><p class="billing" id="computer-billing" hidden></p></div>
             <p id="computer-status" role="status" aria-live="polite" hidden></p>
           </div>
-          <section id="computer-review" class="computer-step computer-live" hidden aria-label="Review the next action"><div class="computer-lbl" id="computer-step-label">3 · Waiting for you</div><h3 id="computer-action-title"></h3><p id="computer-reason"></p><pre id="computer-action-detail"></pre><button type="button" class="quiet computer-reveal" id="computer-details" aria-expanded="false" aria-controls="computer-diagnostics">Details</button><pre id="computer-diagnostics" hidden></pre><div class="computer-row"><button type="button" class="button amber" id="computer-approve">Approve</button><button type="button" class="quiet" id="computer-reject">Reject</button><span id="computer-expiry"></span></div></section>
-          <section id="computer-outcome" class="computer-step" hidden aria-label="After the action"><div class="computer-lbl">After the action</div><p id="computer-outcome-accepted"></p><p id="computer-outcome-text"></p><button type="button" class="quiet computer-reveal" id="computer-outcome-details" aria-expanded="false" aria-controls="computer-outcome-tree" hidden>Details</button><pre id="computer-outcome-tree" hidden></pre></section>
           <section id="computer-read" hidden aria-label="What Sidelook read"><div class="computer-lbl">What Sidelook read</div><pre id="computer-snapshot"></pre></section>
           <section id="computer-done" hidden aria-label="Actions done"><div class="computer-lbl">Done · <span id="computer-count">0 actions</span></div><ol id="computer-history"></ol></section>
+          <section id="computer-outcome" class="computer-step" hidden aria-label="After the action"><div class="computer-lbl">After the action</div><p id="computer-outcome-accepted"></p><p id="computer-outcome-text"></p><button type="button" class="quiet computer-reveal" id="computer-outcome-details" aria-expanded="false" aria-controls="computer-outcome-tree" hidden>Details</button><pre id="computer-outcome-tree" hidden></pre></section>
+          <section id="computer-review" class="computer-step computer-live" hidden aria-label="Review the next action"><div class="decision-head"><div class="computer-lbl" id="computer-step-label">3 · Waiting for you</div><h3 id="computer-action-title"></h3><pre id="computer-action-detail"></pre></div><p id="computer-reason"></p><button type="button" class="quiet computer-reveal" id="computer-details" aria-expanded="false" aria-controls="computer-diagnostics">Details</button><pre id="computer-diagnostics" hidden></pre><div class="computer-row"><button type="button" class="button amber" id="computer-approve">Approve</button><button type="button" class="quiet" id="computer-reject">Reject</button><span id="computer-expiry"></span></div></section>
         </div>
         <footer class="computer-foot"><span>Ctrl+Shift+F12 stops from any app</span><button type="button" id="computer-stop">Stop control</button></footer>
       </div>
     </section>
     <section id="agent-mode" class="agent-mode" aria-label="Agent mode" hidden>
-      <div class="agent-head"><button type="button" class="quiet" id="agent-back">‹ Back</button><strong id="agent-title">Agent mode</strong><span id="agent-status"></span></div>
+      <div class="agent-head" id="agent-head"><button type="button" class="quiet" id="agent-back">‹ Back</button><strong id="agent-title">Agent mode</strong><span id="agent-status"></span></div>
       <p id="agent-lineage" class="agent-lineage" hidden></p>
       <ul id="agent-breakers" class="agent-breakers" aria-label="Paused integrations" hidden></ul>
-      <div class="agent-body">
-        <section id="agent-start">
-          <textarea id="agent-goal" maxlength="2000" rows="4" aria-label="What should the agent accomplish?" placeholder="Resolve Acme's cancellation request: refund the most recent eligible payment, update the CRM, and email them confirmation."></textarea>
-          <div class="agent-apps" id="agent-apps" role="list" aria-label="Connected apps">
-            <span class="agent-app muted" id="agent-app-slack"><i class="agent-dot" aria-hidden="true"></i>Slack</span>
-            <span class="agent-app muted" id="agent-app-stripe"><i class="agent-dot" aria-hidden="true"></i>Stripe</span>
-            <span class="agent-app muted" id="agent-app-hubspot"><i class="agent-dot" aria-hidden="true"></i>HubSpot</span>
-            <span class="agent-app muted" id="agent-app-gmail"><i class="agent-dot" aria-hidden="true"></i>Gmail</span>
-            <span class="agent-app muted" id="agent-app-dashclaw"><i class="agent-dot" aria-hidden="true"></i>DashClaw</span>
-          </div>
-          <p id="agent-model-line"><b id="agent-model-label"></b> · Every write goes through DashClaw.</p>
-          <div class="agent-row"><button type="button" class="button amber" id="agent-start-button">Start</button></div>
-          <p id="agent-error" role="alert" hidden></p>
-        </section>
+      <div class="agent-body" id="agent-body">
         <section id="agent-run" hidden>
           <ol id="agent-timeline"></ol>
           <section id="agent-approval" hidden aria-label="DashClaw policy approval">
-            <h3>DashClaw policy approval</h3>
+            <div class="agent-decision-head"><h3>DashClaw policy approval</h3><p id="agent-approval-line"></p></div>
             <dl id="agent-approval-fields"></dl>
-            <p id="agent-decide-by"></p>
-            <div class="agent-row"><button type="button" class="button amber" id="agent-approve">Approve</button><button type="button" class="quiet" id="agent-reject">Reject</button></div>
+            <div class="agent-row"><button type="button" class="button amber" id="agent-approve">Approve</button><button type="button" class="quiet" id="agent-reject">Reject</button><p id="agent-decide-by"></p></div>
           </section>
           <section id="agent-clarify" hidden aria-label="The agent needs an answer">
             <h3>The agent needs an answer</h3>
@@ -216,6 +206,20 @@
             <p id="agent-final" hidden><b>The agent said</b> <span id="agent-final-text"></span></p>
           </section>
         </section>
+        <section id="agent-start">
+          <p class="agent-again">Start another run</p>
+          <textarea id="agent-goal" maxlength="2000" rows="4" aria-label="What should the agent accomplish?" placeholder="Resolve Acme's cancellation request: refund the most recent eligible payment, update the CRM, and email them confirmation."></textarea>
+          <div class="agent-apps" id="agent-apps" role="list" aria-label="Connected apps">
+            <span class="agent-app muted" id="agent-app-slack"><i class="agent-dot" aria-hidden="true"></i>Slack</span>
+            <span class="agent-app muted" id="agent-app-stripe"><i class="agent-dot" aria-hidden="true"></i>Stripe</span>
+            <span class="agent-app muted" id="agent-app-hubspot"><i class="agent-dot" aria-hidden="true"></i>HubSpot</span>
+            <span class="agent-app muted" id="agent-app-gmail"><i class="agent-dot" aria-hidden="true"></i>Gmail</span>
+            <span class="agent-app muted" id="agent-app-dashclaw"><i class="agent-dot" aria-hidden="true"></i>DashClaw</span>
+          </div>
+          <p id="agent-model-line"><b id="agent-model-label"></b> · Every write goes through DashClaw.</p>
+          <div class="agent-row"><button type="button" class="button amber" id="agent-start-button">Start</button></div>
+          <p id="agent-error" role="alert" hidden></p>
+        </section>
       </div>
       <footer class="agent-foot"><span id="agent-hotkey-note">Ctrl+Shift+F12 stops from any app</span><button type="button" id="agent-stop">Stop</button></footer>
     </section>
@@ -224,8 +228,8 @@
   <dialog id="settings" class="settings" aria-labelledby="settings-title">
     <div class="settings-head"><h2 id="settings-title">Settings</h2><button class="quiet" id="settings-close" data-close="settings">Back</button></div>
     <section class="settings-section settings-more" aria-label="Do more">
-      <button class="quiet" id="computer-open">Computer mode · let Sidelook work in one Windows app, one approved action at a time</button>
-      <button class="quiet" id="agent-open">Agent mode · give Sidelook a business outcome across Slack, Stripe, HubSpot and Gmail</button>
+      <button class="quiet" id="computer-open"><b>Computer mode</b><small>let Sidelook work in one Windows app, one approved action at a time</small></button>
+      <button class="quiet" id="agent-open"><b>Agent mode</b><small>give Sidelook a business outcome across Slack, Stripe, HubSpot and Gmail</small></button>
     </section>
     <section class="settings-section" aria-label="Model">
       <label class="settings-field" for="model-choice">Model <select id="model-choice"></select></label>
@@ -268,10 +272,10 @@
   <dialog id="send-preview" aria-labelledby="send-preview-title">
     <div class="settings-head"><h2 id="send-preview-title">What goes with the next send</h2><button class="quiet" data-close="send-preview">Close</button></div>
     <dl id="send-preview-list"></dl>
-    <details><summary>The request body, as it will be posted</summary><pre id="send-preview-body"></pre></details>
     <h3>Sent this session</h3>
     <p class="muted" id="send-ledger-empty">Nothing has been sent yet. The list resets when Sidelook reloads.</p>
     <ol id="send-ledger"></ol>
+    <details><summary>The request body, as it will be posted</summary><pre id="send-preview-body"></pre></details>
   </dialog>
 
   <dialog id="computer-lease" aria-labelledby="computer-lease-title">

@@ -13,7 +13,7 @@ const plural=(n,word)=>`${n} ${word}${n===1?'':'s'}`;
 export function initAgent({api,getSelection,getState,onState}) {
   const $=id=>document.getElementById('agent-'+id);
   const host=document.getElementById('companion'),settings=document.getElementById('settings');
-  let run=null,watchController=null,ticker=null,expanded=new Set(),starting=false,deciding=false,answering=false;
+  let run=null,watchController=null,ticker=null,expanded=new Set(),starting=false,deciding=false,answering=false,scrolledTo=null;
   let stopping=false,reconnecting=false,reconnectAttempts=0,reconnectTimer=null,pollTimer=null,silenceTimer=null,lastMessageAt=0;
   // Self healing (docs/AGENT_SELF_HEALING.md §8): the diagnostics panel is fetched once per run, on first open, and
   // discarded when the run changes; Continue keeps its own in-flight flag like Approve/Reject/Answer do.
@@ -140,6 +140,7 @@ export function initAgent({api,getSelection,getState,onState}) {
   function renderApproval() {
     const pending=run?.status==='waiting_for_approval'?run.approvals.find(a=>a.status==='pending'):null;
     $('approval').hidden=!pending;renderDecideBy();if(!pending) return;
+    $('approval-line').textContent=[pending.app,pending.operation].filter(Boolean).join(' · ');
     const rows=[['App',pending.app],['Operation',pending.operation],['Customer',pending.entity]];
     if(pending.amount) rows.push(['Amount',pending.amount]);
     rows.push(['Agent reason',pending.reason]);
@@ -149,6 +150,7 @@ export function initAgent({api,getSelection,getState,onState}) {
     for(const item of pending.sourceEvidence || []) list.append(sourceEvidenceItem(item));
     evDd.append(list);fields.append(evDt,evDd);
     for(const [label,value] of [['Policy reason',pending.policyReason],['Risk',pending.riskScore],['Action id',pending.actionId]]) {const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=value;fields.append(dt,dd);}
+    if(scrolledTo!==pending.actionId){scrolledTo=pending.actionId;$('approval').scrollIntoView({block:'nearest'});}
   }
   async function decide(kind) {
     if(deciding || !run) return;
@@ -388,6 +390,7 @@ export function initAgent({api,getSelection,getState,onState}) {
   $('diagnostics-toggle').onclick=toggleDiagnostics;
   $('continue').onclick=doContinue;
   document.getElementById('model-choice').addEventListener('change',controls);
+  let scrolled=false;$('body').addEventListener('scroll',()=>{const s=$('body').scrollTop>0;if(s!==scrolled){scrolled=s;$('head').classList.toggle('scrolled',s);}},{passive:true});
   controls();
   return {open,stop};
 }

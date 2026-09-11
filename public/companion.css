@@ -27,6 +27,8 @@ body:not([data-native]) .companion-edges{display:none}
 /* The conversation. It scrolls only once the panel has hit the top of the working area. */
 .companion-scroll{overflow:auto;flex:1;min-height:0;padding:2px 16px 8px;scrollbar-width:thin;scrollbar-color:var(--line) transparent;display:flex;flex-direction:column}
 #companion-messages{flex:0 0 auto}#companion-deck{flex:0 0 auto;margin-top:auto}
+/* P2: in the studio column the deck stops being bottom-pinned; the native panel is content-height and never sees this. */
+body[data-surface=studio] #companion-deck{margin-top:0}
 /* The tile: the window Sidelook will look at, as an object. The whole tile is the picker. */
 #companion .companion-tile{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:6px 4px 10px;min-height:0;border-radius:8px}
 #companion .companion-tile:hover:not(:disabled){background:none}#companion .companion-tile:hover:not(:disabled) b{color:var(--accent)}
@@ -48,7 +50,7 @@ body:not([data-native]) .companion-edges{display:none}
 .companion-message.user{display:flex;justify-content:flex-end;flex-wrap:wrap}.companion-message.user .companion-bubble{display:flex;align-items:flex-start;gap:8px;max-width:88%;background:var(--panel);border:1px solid var(--line);border-radius:10px 10px 2px 10px;padding:7px 11px;color:#d0d4de}
 .companion-message p{white-space:pre-wrap;margin:0 0 6px}.companion-message p:last-child{margin-bottom:0}.companion-message ol,.companion-message ul{margin:6px 0;padding-left:22px}.companion-message li{margin:4px 0}.companion-message.interrupted{opacity:.65}
 #companion .companion-evidence{width:40px;min-height:28px;height:28px;padding:0;flex:0 0 auto;border:1px solid var(--line);border-radius:3px;overflow:hidden;background:var(--paper);display:grid;place-items:center;font:12px Georgia,serif;color:#505972;margin-top:2px}#companion .companion-evidence img{width:100%;height:100%;object-fit:cover;display:block}#companion .companion-evidence[aria-expanded=true]{outline:2px solid var(--accent);outline-offset:1px}
-.companion-message>img,.companion-message>pre{flex-basis:100%}.companion-message>img{display:block;max-width:100%;margin:6px 0 0;border:1px solid var(--line)}.companion-message>pre{max-height:160px;overflow:auto;margin:6px 0 0;padding:8px 10px;font-size:12px;line-height:1.45;white-space:pre-wrap}
+.companion-message>img,.companion-message>pre{flex-basis:100%}.companion-message>img{display:block;max-width:100%;margin:6px 0 0;border:1px solid var(--line)}
 #companion .companion-workflow{border:1px solid var(--accent);color:var(--accent);font-size:13px;margin-top:8px}#companion .companion-copy{margin-top:2px;padding:2px 0;min-height:24px;font-size:12px}
 /* A break in the conversation: the messages above it stay on screen, the context does not travel past it. */
 .companion-divider{display:flex;align-items:center;gap:8px;margin:0 0 14px;font-size:12px;color:var(--muted)}.companion-divider::before,.companion-divider::after{content:'';flex:1;border-top:1px solid var(--line)}
@@ -58,15 +60,17 @@ body:not([data-native]) .companion-edges{display:none}
 .companion-compose{padding:6px 16px 12px;flex-shrink:0}
 /* Above the box: three plain words for the conversation, then one line saying how full the context is and what the sends cost. */
 .companion-chat-controls{display:flex;align-items:center;gap:2px;margin:0 0 2px}#companion .companion-chat-controls .quiet{padding:4px 6px}
-.companion-meter{font-size:12px;color:var(--muted);margin:0 2px 8px;line-height:1.35}.companion-meter .warn{color:#f2b49e}
-#companion-error{color:#f2b49e;font-size:12px;max-height:60px;overflow:auto;margin:0 0 8px}
+.companion-meter{font-size:12px;color:var(--muted);margin:0 2px 8px;line-height:1.35}.companion-meter .warn{color:var(--warn)}
+#companion-error{color:var(--warn);font-size:12px;max-height:60px;overflow:auto;margin:0 0 8px}
+/* P1: rest state hides what cannot act. #companion-messages is :empty at load and after New chat, in both rest states. */
+#companion:has(#companion-messages:empty) .companion-chat-controls{display:none}
+#companion:has(#companion-messages:empty) #companion-meter{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 #companion-form{position:relative;border:1px solid #3c4357;border-radius:12px;background:var(--panel);padding:10px 12px 8px}#companion-form:focus-within{border-color:var(--accent)}
 .companion-attach{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.companion-attach:not(:has(:not([hidden]))){display:none}
 .companion-att{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:4px 4px 4px 4px;font-size:12px;background:var(--bg);max-width:100%;min-width:0}
 #companion-frame{width:44px;height:30px;object-fit:cover;border-radius:4px;border:1px solid var(--line);flex-shrink:0}.companion-att-text{width:44px;height:30px;border-radius:4px;border:1px solid var(--line);display:grid;place-items:center;font:12px Georgia,serif;color:var(--muted);flex-shrink:0}
 .companion-att>span:not(.companion-att-text){min-width:0}.companion-att b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;color:var(--ink)}.companion-att small{display:block;color:var(--muted);font-size:12px}
 #companion .companion-att button{width:24px;min-height:24px;padding:0;color:var(--muted);font-size:16px;line-height:1;flex-shrink:0}
-#companion-text-body{max-height:120px;overflow:auto;margin:0 0 8px;padding:8px 10px;font-size:12px;line-height:1.45;white-space:pre-wrap;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 #companion-input{resize:none;display:block;width:100%;margin:0;padding:0;min-height:21px;max-height:168px;border:0;background:transparent;color:var(--ink);font:inherit;line-height:1.5;overflow-y:hidden}#companion-input::placeholder{color:#717c9c}#companion #companion-input:focus-visible{outline:0}
 .companion-grip{position:absolute;right:6px;bottom:6px;width:12px;height:12px;color:#4f5871;cursor:ns-resize;touch-action:none}.companion-grip::before{content:'';position:absolute;right:1px;bottom:1px;width:8px;height:8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;border-radius:0 0 2px 0}
 .companion-tools{display:flex;align-items:center;gap:0;margin-top:8px}
@@ -79,21 +83,33 @@ body:not([data-native]) .companion-edges{display:none}
 /* Computer mode: a screen, not a card. It takes the body and the box; the header stays. */
 #companion.computer .companion-scroll,#companion.computer .companion-compose{display:none}
 #computer-mode{display:flex;flex-direction:column;flex:1;min-height:0}#computer-work{display:flex;flex-direction:column;flex:1;min-height:0}
-.computer-head{display:flex;align-items:center;gap:6px;padding:0 16px 8px 8px;flex-shrink:0}.computer-head strong{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}#computer-left{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
-.computer-body{overflow:auto;flex:1;min-height:0;padding:4px 16px 12px;display:flex;flex-direction:column;gap:12px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-.computer-step{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)}.computer-step.computer-live{border-color:var(--accent)}
+.computer-head{display:flex;align-items:center;gap:6px;min-height:36px;padding:0 16px 8px 8px;flex-shrink:0;position:relative}.computer-head::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--line);opacity:0;transition:opacity .2s var(--ease)}.computer-head.scrolled::after{opacity:1}.computer-head strong{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}#computer-left{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.computer-body{overflow:auto;flex:1;min-height:0;padding:0 16px 12px;display:flex;flex-direction:column;gap:0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.computer-body>*{padding:12px 0}.computer-body>*+*{border-top:1px solid var(--line)}
+.computer-step{border:0;border-radius:0;background:none}.computer-body>.computer-live{border:1px solid var(--accent);border-radius:10px;background:var(--panel);padding:12px 14px;margin-top:12px}
 .computer-lbl{font-size:12px;color:var(--muted);margin-bottom:8px}
-.computer-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.computer-row+.computer-row{margin-top:6px}.computer-row>span{font-size:12px;color:var(--muted)}#computer-mode select{flex:1;min-width:120px;font-size:13px;padding:7px 8px;border-radius:7px}
+.computer-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.computer-row+.computer-row{margin-top:6px}.computer-row>span{font-size:12px;color:var(--muted)}#computer-mode select{flex:1;min-width:120px;min-height:36px;font-size:13px;padding:7px 8px;border-radius:7px}
 #computer-task{width:100%;resize:none;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.5;padding:8px 10px;margin:0 0 8px}
-#computer-mode .button.amber{background:var(--accent);color:var(--on-accent);font-weight:600;padding:8px 14px;border-radius:9px;font-size:14px}#computer-mode .button.amber:hover:not(:disabled){background:var(--accent-hover)}
+#computer-mode .button.amber{background:var(--accent);color:var(--on-accent);font-weight:600;min-height:40px;padding:0 14px;border-radius:9px;font-size:14px}#computer-mode .button.amber:hover:not(:disabled){background:var(--accent-hover)}
 .computer-goes{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}.computer-goes .billing{margin:2px 0 0;color:#10B981}
 #computer-status{font-size:12px;color:var(--muted);margin:8px 0 0}
-#computer-review h3{font:500 16px/1.3 'Segoe UI',sans-serif;margin:0 0 4px}#computer-review p{margin:0 0 8px;color:var(--muted);font-size:13px}#computer-review pre{font-size:12px;line-height:1.5;color:var(--muted);background:var(--bg);border-radius:6px;padding:8px 10px;margin:0 0 10px;white-space:pre-wrap}#computer-expiry{margin-left:auto;font-size:12px;color:var(--muted)}
-#companion .computer-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0;margin:0 0 10px}#companion .computer-reveal[aria-expanded=true]{color:var(--ink)}#computer-diagnostics,#computer-outcome-tree{max-height:200px;overflow:auto;font-size:12px;line-height:1.45;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin:0 0 10px;white-space:pre-wrap}
-#computer-outcome p{margin:0 0 6px;font-size:13px;line-height:1.45}#computer-outcome-accepted{color:var(--muted)}#computer-outcome-text{color:var(--ink)}#computer-outcome-text.unverified{color:#10B981}
-#computer-read pre{max-height:160px;overflow:auto;font-size:12px;line-height:1.45;margin:0;padding:8px 10px;white-space:pre-wrap;border:1px solid var(--line);border-radius:6px}
+#computer-review h3{font:500 16px/1.3 'Segoe UI',sans-serif;margin:0 0 4px}#computer-review p{margin:0 0 8px;color:var(--muted);font-size:13px}#computer-expiry{order:-1;flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+#companion .computer-reveal{font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:0;min-height:0;margin:0 0 10px}#companion .computer-reveal[aria-expanded=true]{color:var(--ink)}
+#computer-outcome p{margin:0 0 6px;font-size:13px;line-height:1.45}#computer-outcome-accepted{color:var(--muted)}#computer-outcome-text{color:var(--ink)}#computer-outcome-text.unverified{color:var(--warn)}
 #computer-history{margin:0;padding-left:20px;font-size:13px;color:var(--muted)}#computer-history li{margin:2px 0}
-.computer-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0}#companion #computer-stop{background:#2b313f;color:var(--ink);padding:7px 14px;font-weight:500}#companion #computer-stop:hover:not(:disabled){background:#363c4e}
+.computer-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 12px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);flex-shrink:0;min-height:44px}#companion #computer-stop{background:#2b313f;color:var(--ink);padding:7px 14px;font-weight:500}#companion #computer-stop:hover:not(:disabled){background:#363c4e}
+/* The decision card: the head (label, headline, target) and the row (expiry, Approve, Reject) pin to the body while the reason and Details scroll between them. One evidence rule for every pre in the panel. */
+.computer-step:has(#computer-window option:not([value=""]):checked) .computer-launch{display:none}
+.computer-body:has(#computer-review:not([hidden])) #computer-next{background:#2f3443;color:var(--ink)}
+.computer-body:has(#computer-review:not([hidden])) #computer-next:hover:not(:disabled){background:#363c4e}
+#computer-review .decision-head{position:sticky;top:0;z-index:1;background:var(--panel);margin:-12px -14px 0;padding:12px 14px 8px;border-radius:9px 9px 0 0}
+#computer-review .decision-head pre{margin:0}
+#computer-review #computer-reason{margin:10px 0 8px}
+#computer-review .computer-row{position:sticky;bottom:0;z-index:1;background:var(--panel);margin:0 -14px -12px;padding:10px 14px 12px;border-top:1px solid var(--line);border-radius:0 0 9px 9px}
+#companion pre{max-height:200px;overflow:auto;margin:0;padding:8px 10px;font-size:12px;line-height:1.45;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere}
+#companion #companion-text-body{max-height:120px;margin:0 0 8px}
+#companion .companion-message>pre{max-height:160px;margin:6px 0 0;flex-basis:100%}
+#companion #computer-diagnostics,#companion #computer-outcome-tree{margin:0 0 10px}
+#companion #computer-read pre{max-height:160px}
 
 /* Too narrow for the column beside the studio: Chat in the toolbar slides it over the right edge of the stage instead, and ← Panel or Escape closes it. */
 @media(max-width:1180px){body[data-surface=studio] #companion{display:none}body[data-surface=studio].chat-open #companion{display:flex;position:fixed;top:0;right:0;width:440px;max-width:100%;height:100dvh;z-index:6;box-shadow:-24px 0 60px #0b0f1a99}}

@@ -307,6 +307,12 @@ try {
   const detailsButtons = page.locator('#agent-timeline .agent-reveal');
   await detailsButtons.first().click();
   assert.match(await page.locator('#agent-timeline pre').first().innerText(),/channel: #support/);count++;
+  // The decision never scrolls (spec 2026-09-11, V1): with evidence expanded above it, the Approve row and the pinned sentence sit
+  // inside the body's viewport with no scroll. A bounding box, not isVisible(), which is true for an element below the fold.
+  {const bodyBox=await page.locator('.agent-body').boundingBox();
+  for(const id of ['agent-approve','agent-approval-line']){const box=await page.locator('#'+id).boundingBox();assert.ok(box&&box.y>=bodyBox.y-1&&box.y+box.height<=bodyBox.y+bodyBox.height+1,`#${id} spans ${Math.round(box?.y)}..${Math.round(box?.y+box?.height)} but the body shows ${Math.round(bodyBox.y)}..${Math.round(bodyBox.y+bodyBox.height)}; the decision stays on screen without scrolling`);}
+  assert.equal(await page.locator('#agent-approval-line').innerText(),'stripe · Refund $485.00');
+  assert.equal(await page.locator('#agent-status').evaluate(el=>getComputedStyle(el).textTransform),'lowercase','the status reads Waiting for approval, not Waiting For Approval');count++;}
 
   await page.locator('#companion').screenshot({path:'.artifacts/agent-approval.png'});
 

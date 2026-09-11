@@ -33,6 +33,11 @@ try{
   const detail=await page.locator('#computer-action-detail').innerText();assert.match(detail,/^In: Calculator fixture\nTarget: Button "Seven"$/);assert.equal(await page.locator('#computer-reason').innerText(),'Press Seven in the test calculator.');
   assert.equal(await page.locator('#computer-diagnostics').isHidden(),true,'diagnostics are behind Details');await page.locator('#computer-details').click();assert.equal(await page.locator('#computer-details').getAttribute('aria-expanded'),'true');
   const diagnostics=await page.locator('#computer-diagnostics').innerText();assert.match(diagnostics,/Control reference: 1\.2/);assert.match(diagnostics,/SENT WITH THIS MODEL STEP · Calculator fixture\nButton: Seven  #1\.2/);assert.equal(await page.locator('#computer-outcome').isHidden(),true);count++;
+  // The decision never scrolls (spec 2026-09-11, V2): at a 440x760 panel with Details open, Approve and the target sit inside the body's viewport with no scroll.
+  await page.setViewportSize({width:440,height:760});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  {const bodyBox=await page.locator('.computer-body').boundingBox();
+  for(const id of ['computer-approve','computer-action-detail']){const box=await page.locator('#'+id).boundingBox();assert.ok(box&&box.y>=bodyBox.y-1&&box.y+box.height<=bodyBox.y+bodyBox.height+1,`#${id} spans ${Math.round(box?.y)}..${Math.round(box?.y+box?.height)} but the body shows ${Math.round(bodyBox.y)}..${Math.round(bodyBox.y+bodyBox.height)}; the decision and its target stay on screen without scrolling`);}}
+  await page.setViewportSize({width:1440,height:1000});count++;
   await page.locator('#companion').screenshot({path:'.artifacts/computer-desktop.png'});
   // Approve: one act, then one local reading of the same window; acceptance and outcome are two different lines; then the next step is planned and waits.
   const plannedBefore=planned.length;

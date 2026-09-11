@@ -176,6 +176,7 @@ function clearObservations() {
   state.observation = null; $('annotations').replaceChildren(); $('observations').replaceChildren();
   $('observation-time').textContent = 'No frame sent yet';
   $('observation-summary').textContent = 'I’ll read the details, connect them to your direction, and build from there.';
+  $('understanding').hidden = true;
 }
 // A chosen image (an upload, the sample, a still taken with Use this frame, the panel's screenshot) is attached; a restored saved frame is shown, not attached.
 function setImage(image,label,attach=true) {
@@ -312,6 +313,7 @@ async function loadImageUrl(url,label) {
 }
 function renderObservations(observation,stamp) {
   state.observation = observation;
+  $('understanding').hidden = false;
   $('observation-summary').textContent = observation.summary;
   $('observation-time').textContent = `From the frame sent at ${time(stamp)}`;
   $('observations').replaceChildren(...observation.observations.map((item,i) => {
@@ -569,6 +571,15 @@ function setViewport(mobile) {
 }
 $('expand').addEventListener('click',() => { const expanded = document.querySelector('.stage').classList.toggle('expanded'); $('expand').setAttribute('aria-label',expanded ? 'Collapse preview' : 'Expand preview'); });
 document.addEventListener('keydown',event => { if (event.key === 'Escape') { document.querySelector('.stage').classList.remove('expanded'); $('expand').setAttribute('aria-label','Expand preview'); setChat(false); } });
+// F6 cycles the studio's panes (Direction, Reference, Stage, the panel column); Shift+F6 goes back. Focus lands on the pane's first control.
+document.addEventListener('keydown',event => {
+  if (event.key !== 'F6' || document.body.dataset.surface !== 'studio') return;
+  const panes = ['.pane-direction','.pane-reference','.stage','#companion'].map(s => document.querySelector(s)).filter(el => el && el.offsetParent !== null);
+  if (!panes.length) return; event.preventDefault();
+  const at = panes.findIndex(p => p.contains(document.activeElement));
+  const next = panes[(at + (event.shiftKey ? -1 : 1) + panes.length) % panes.length];
+  (next.querySelector('textarea') || next.querySelector('button:not([disabled]):not([hidden]),select') || next).focus();
+});
 // Below 1180 the column cannot sit beside the studio, so Chat slides it over the right edge of the stage. Escape, ← Panel, and a window wide enough for the column all close it.
 function setChat(open) { document.body.classList.toggle('chat-open',open); $('chat-toggle').setAttribute('aria-expanded',String(open)); }
 $('chat-toggle').addEventListener('click',() => setChat(!document.body.classList.contains('chat-open')));
