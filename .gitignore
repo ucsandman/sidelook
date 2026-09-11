@@ -9,3 +9,4 @@ node_modules/
 *.log
 .handoff-notes*.md
 .impeccable.md
+.worktrees/

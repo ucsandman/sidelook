@@ -32,7 +32,10 @@
     "agent:seed": "node scripts/agent-seed.mjs",
     "agent:setup-dashclaw": "node scripts/agent-setup-dashclaw.mjs",
     "agent:gmail-auth": "node scripts/gmail-auth.mjs --open",
-    "test:agent-live": "node --test tests/agent-live.test.mjs"
+    "test:agent-live": "node --test tests/agent-live.test.mjs",
+    "agent:learn": "node agent-learning/learn.mjs",
+    "agent:regress": "node agent-learning/regress.mjs --set all",
+    "verify:learn": "node agent-learning/learn.mjs --fixtures agent-learning/fixtures --out .artifacts/agent-learning/verify --verify"
   },
   "license": "MIT",
   "dependencies": {

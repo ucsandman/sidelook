@@ -313,5 +313,6 @@ export async function startFakeDashClaw({policy={},keys={}}={}){
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const {port}=server.address();
-  return {baseUrl:`http://127.0.0.1:${port}`,close:()=>new Promise(resolve=>server.close(resolve)),state,faults,resetFaults};
+  // `policy` is the effective rule set, read by eval/run.mjs's invariant check (a refund the hold pattern covers must carry approved_by).
+  return {baseUrl:`http://127.0.0.1:${port}`,close:()=>new Promise(resolve=>server.close(resolve)),state,faults,resetFaults,policy:cfg};
 }

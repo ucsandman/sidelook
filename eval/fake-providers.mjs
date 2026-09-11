@@ -16,23 +16,48 @@ const FAULT_KINDS = {
   unavailable: {code:'NETWORK', retryable:true, sentRequest:false, once:false, applyChange:false}
 };
 
+// Two counted kinds take the object form {kind, times, retryAfterMs}: failTimes answers SERVER before any state change `times`
+// times, then works; rateLimit answers 429 with a Retry-After (sentRequest true, as the real classifier treats a 429) `times`
+// times, then works. Both are for the self-healing scenarios and the regression corpus (docs/AGENT_SELF_HEALING.md §10).
+const COUNTED_KINDS = {
+  failTimes: {code:'SERVER', retryable:true, sentRequest:false, status:500},
+  rateLimit: {code:'RATE_LIMIT', retryable:true, sentRequest:true, status:429}
+};
+function normalizeFault(fault) {
+  if (typeof fault === 'string') { if (!FAULT_KINDS[fault]) throw new Error(`Unknown fault kind "${fault}".`); return {kind:fault}; }
+  if (!fault || typeof fault !== 'object' || !COUNTED_KINDS[fault.kind]) throw new Error(`Unknown fault kind "${fault?.kind}".`);
+  const times = Number(fault.times);
+  if (!Number.isInteger(times) || times < 1) throw new Error(`Fault ${fault.kind} needs times >= 1.`);
+  return {kind:fault.kind, remaining:times, retryAfterMs:Number.isFinite(fault.retryAfterMs) ? fault.retryAfterMs : null};
+}
+
 function createFaultRegistry(calls) {
   const map = new Map();
   return {
-    set(method, kind) { if (!FAULT_KINDS[kind]) throw new Error(`Unknown fault kind "${kind}".`); map.set(method, kind); },
+    set(method, fault) { map.set(method, normalizeFault(fault)); },
     clear(method) { map.delete(method); },
     // Runs `fn` under whatever fault is registered for `method`. `fn` performs the real state change; a lostAfterSuccess fault still
     // runs it (the request reached the provider) before throwing, everything else throws before `fn` ever runs.
     run(method, fn) {
-      const kind = map.get(method);
-      if (!kind) return fn();
-      const spec = FAULT_KINDS[kind];
+      const fault = map.get(method);
+      if (!fault) return fn();
+      if (fault.remaining !== undefined) {
+        const spec = COUNTED_KINDS[fault.kind];
+        fault.remaining -= 1;
+        if (fault.remaining <= 0) map.delete(method);
+        const last = calls.findLast(c => c.method === method);
+        if (last) last.ok = false;
+        const error = new ProviderError(spec.code, `${method} failed (${fault.kind}).`, {retryable:spec.retryable, sentRequest:spec.sentRequest, status:spec.status});
+        if (fault.retryAfterMs !== null) error.retryAfterMs = fault.retryAfterMs;
+        throw error;
+      }
+      const spec = FAULT_KINDS[fault.kind];
       if (spec.once) map.delete(method);
       if (spec.applyChange) fn(); // lostAfterSuccess: the write really happened, only the response is lost
       // The call ledger says whether this attempt took effect, so a refused attempt never counts as a duplicate side effect.
       const last = calls.findLast(c => c.method === method);
       if (last) last.ok = Boolean(spec.applyChange);
-      throw new ProviderError(spec.code, `${method} failed (${kind}).`, {retryable:spec.retryable, sentRequest:spec.sentRequest, status:spec.code === 'AUTH' ? 401 : spec.code === 'SERVER' ? 500 : null});
+      throw new ProviderError(spec.code, `${method} failed (${fault.kind}).`, {retryable:spec.retryable, sentRequest:spec.sentRequest, status:spec.code === 'AUTH' ? 401 : spec.code === 'SERVER' ? 500 : null});
     }
   };
 }
