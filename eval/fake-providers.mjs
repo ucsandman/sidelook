@@ -185,15 +185,24 @@ export function createFakeProviders({fixtures = {}, faults: initialFaults = {}, 
         const id = bareId(match[1].trim());
         const to = /^To:\s*(.+)$/im.exec(mime)?.[1] || '';
         const subject = /^Subject:\s*(.+)$/im.exec(mime)?.[1] || '';
-        const record_ = {id:`gmail_${sent.length + 1}`, threadId:`thread_${sent.length + 1}`, messageId:id, to, subject, labelIds:['SENT'], at:iso()};
+        const body = mime.split('\r\n\r\n').slice(1).join('\r\n\r\n');
+        const record_ = {id:`gmail_${sent.length + 1}`, threadId:`thread_${sent.length + 1}`, messageId:id, to, subject, body, labelIds:['SENT'], at:iso()};
         sent.push(record_); sentByMessageId.set(id, record_);
         return {id:record_.id, threadId:record_.threadId, labelIds:record_.labelIds};
       });
     },
-    async findByMessageId({messageId = ''} = {}) {
-      record('gmail.findByMessageId', {messageId});
+    // Like Gmail: the message by its own id answers at once; the search matches the Message-ID header or a reference token in the body.
+    async getMessage({id = ''} = {}) {
+      record('gmail.getMessage', {id});
+      return faults.run('gmail.getMessage', () => {
+        const found = sent.find(m => m.id === id);
+        return found ? {found:true, id:found.id, threadId:found.threadId, labelIds:found.labelIds} : {found:false, id:'', threadId:'', labelIds:[]};
+      });
+    },
+    async findByMessageId({messageId = '', reference = ''} = {}) {
+      record('gmail.findByMessageId', {messageId, reference});
       return faults.run('gmail.findByMessageId', () => {
-        const found = sentByMessageId.get(bareId(messageId));
+        const found = sentByMessageId.get(bareId(messageId)) || (reference ? sent.find(m => m.body.includes(reference)) : undefined);
         return found ? {found:true, id:found.id, threadId:found.threadId, labelIds:found.labelIds} : {found:false, id:'', threadId:'', labelIds:[]};
       });
     }

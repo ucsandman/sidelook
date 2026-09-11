@@ -159,7 +159,10 @@ test('gmail.prepare_message: recipient confidence, non-fabrication check, and th
   const ctx=governed.calls.check[0];
   assert.equal(ctx.actionType,'email','governed.mjs reads ctx.actionType, not ctx.action_type');
   assert.equal(typeof ctx.declaredGoal,'string');assert.ok(ctx.declaredGoal.length>0);
-  assert.equal(ctx.content,'We refunded $485.00.');
+  // The reference line is part of the message DashClaw checks and Gmail sends; Gmail search finds the message by it.
+  assert.match(r.entities.email.reference,/^SL[0-9A-F]{12}$/);
+  assert.equal(ctx.content,`We refunded $485.00.\n\nReference: ${r.entities.email.reference}`);
+  assert.equal(r.entities.email.body,ctx.content);
   assert.equal(typeof ctx.sourceOfTruth,'object');assert.ok(Array.isArray(ctx.sourceOfTruth.allowedFacts));
   const governedBad=fakeGoverned({checkResult:{decision:'block',nonFabrication:[{verdict:'block',violations:[{code:'fabricated_fact',label:'money',detail:'$500.00'}]}]}});
   const obsLow=await READ_HANDLERS['gmail.prepare_message']({args:{to:'someone-else@example.com',subject:'x',body:'y'},run:r,governed:governedBad,config:{},now:()=>Date.now()});

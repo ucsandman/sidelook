@@ -469,6 +469,32 @@ test('gmail.send posts the raw message and returns the provider ids',async()=>{
   assert.deepEqual(result,{id:'msg_1',threadId:'thread_1',labelIds:['SENT']});
 });
 
+test('gmail.getMessage reads the message by the id the send returned, and a 404 reads as not found',async()=>{
+  const config=loadConfig({env:gmailEnv,loadFile:false});
+  const {fetchImpl}=fakeGmailFetch(({url})=>{
+    if(url.endsWith('/token')) return {status:200,body:{access_token:'tok',expires_in:3600}};
+    if(url.includes('/messages/msg_1?format=metadata')) return {status:200,body:{id:'msg_1',threadId:'thread_1',labelIds:['SENT']}};
+    return {status:404,body:{error:{message:'Requested entity was not found.'}}};
+  });
+  const gmail=createGmail({config,fetchImpl});
+  assert.deepEqual(await gmail.getMessage({id:'msg_1'}),{found:true,id:'msg_1',threadId:'thread_1',labelIds:['SENT']});
+  assert.deepEqual(await gmail.getMessage({id:'msg_gone'}),{found:false,id:'',threadId:'',labelIds:[]});
+});
+
+test('gmail.findByMessageId searches rfc822msgid OR the quoted reference, then reads the first match',async()=>{
+  const config=loadConfig({env:gmailEnv,loadFile:false});
+  const {fetchImpl}=fakeGmailFetch(({url})=>{
+    if(url.endsWith('/token')) return {status:200,body:{access_token:'tok',expires_in:3600}};
+    if(url.includes('/messages?q=')){
+      assert.ok(url.includes(encodeURIComponent('rfc822msgid:sidelook-run_1-1@sidelook.local OR "SL0123456789AB"')),url);
+      return {status:200,body:{messages:[{id:'msg_1'}]}};
+    }
+    return {status:200,body:{id:'msg_1',threadId:'thread_1',labelIds:['SENT']}};
+  });
+  const result=await createGmail({config,fetchImpl}).findByMessageId({messageId:'<sidelook-run_1-1@sidelook.local>',reference:'SL0123456789AB'});
+  assert.deepEqual(result,{found:true,id:'msg_1',threadId:'thread_1',labelIds:['SENT']});
+});
+
 test('gmail.findByMessageId searches rfc822msgid without angle brackets, then reads the first match',async()=>{
   const config=loadConfig({env:gmailEnv,loadFile:false});
   const {fetchImpl}=fakeGmailFetch(({url})=>{

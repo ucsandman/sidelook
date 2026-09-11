@@ -11,7 +11,7 @@ import {createGoverned} from '../lib/agent/governed.mjs';
 import {createHealth} from '../lib/agent/health.mjs';
 import {request} from '../lib/agent/http.mjs';
 import {createRun,addFact,transition} from '../lib/agent/run.mjs';
-import {sourceOfTruth} from '../lib/agent/facts.mjs';
+import {sourceOfTruth,emailReference} from '../lib/agent/facts.mjs';
 import {executeWrite} from '../lib/agent/effects.mjs';
 
 const ENABLED=process.env.RUN_LIVE_AGENT_TESTS==='1';
@@ -98,18 +98,26 @@ test('HubSpot: a property round trip on the seeded contact',async t=>{
   console.log(`hubspot live test: contact ${contact.id}, ${property} set to ${target} then restored to ${before}.`);
 });
 
-test('Gmail: sends a one-line test message to itself and finds it by Message-ID',async t=>{
+test('Gmail: sends a one-line test message to itself, reads it back by id, and finds it by reference',async t=>{
   if(!ENABLED) return t.skip(SKIP_REASON);
   if(!config.gmail.configured) return t.skip('Gmail is not configured (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_FROM); this live round trip needs it.');
   const messageId=`<sidelook-live-test-${Date.now()}@sidelook.local>`;
-  const raw=providers.gmail.composeRaw({to:config.gmail.from,subject:'Sidelook live test',body:'This is a one-line test message from the Sidelook live test suite.',messageId});
+  const reference=emailReference(messageId);
+  const raw=providers.gmail.composeRaw({to:config.gmail.from,subject:'Sidelook live test',body:`This is a one-line test message from the Sidelook live test suite.\n\nReference: ${reference}`,messageId});
   const sent=await providers.gmail.send({raw});
-  console.log(`gmail live test: sent ${sent.id} (Message-ID ${messageId}) to ${config.gmail.from}`);
+  console.log(`gmail live test: sent ${sent.id} (reference ${reference}) to ${config.gmail.from}`);
+  // Verification path: the id Gmail returned answers at once.
+  const byId=await providers.gmail.getMessage({id:sent.id});
+  assert.ok(byId.found,`Gmail does not hold message ${sent.id}.`);
+  assert.ok((byId.labelIds || []).includes('SENT'),`Gmail message ${sent.id} is not labeled SENT.`);
+  // Reconciliation path: the search index lags a send (Gmail also rewrites the Message-ID for gmail.com senders), so the
+  // reference in the body is what a lost send answer is found by; give the index up to 90 s.
   let found={found:false};
-  for(let i=0;i<10 && !found.found;i++){await sleep(1000);found=await providers.gmail.findByMessageId({messageId});}
-  assert.ok(found.found,`Gmail never indexed a message with Message-ID ${messageId}.`);
-  assert.ok((found.labelIds || []).includes('SENT'),`Gmail message ${found.id} is not labeled SENT.`);
-  console.log(`gmail live test: found ${found.id} in Sent.`);
+  const startedAt=Date.now();
+  while(!found.found && Date.now()-startedAt<90000){await sleep(3000);found=await providers.gmail.findByMessageId({messageId,reference});}
+  assert.ok(found.found,`Gmail search never indexed reference ${reference} within 90 s.`);
+  assert.equal(found.id,sent.id,'the search found a different message than the one sent');
+  console.log(`gmail live test: found ${found.id} by reference after ${Math.round((Date.now()-startedAt)/1000)} s.`);
 });
 
 test('DashClaw: non-fabrication blocks a fabricated amount and passes the real facts',async t=>{

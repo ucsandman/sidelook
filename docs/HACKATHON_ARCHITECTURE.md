@@ -146,9 +146,9 @@ run, never a silent skip.
 | `hubspot.get_customer` | read | Current value of the configured status property. |
 | `hubspot.update_customer` | **write, low risk** | Governed. Only the configured property and an allow-listed value. A precheck read that already matches is recorded as verified with zero write attempts. |
 | `hubspot.verify_customer_state` | read | Exposes the read-back to the model directly. |
-| `gmail.prepare_message` | read (no effect) | Mints a deterministic Message-ID, runs DashClaw's non-fabrication check against the run's verified facts, and records recipient confidence (high only if the address matches Stripe or HubSpot on file). |
-| `gmail.send_message` | **write, external** | Governed. Sends exactly the prepared message; a low-confidence recipient carries `risk_score:92`. Verify: a Gmail search by Message-ID under Sent. |
-| `gmail.find_sent_message` | read | Search by Message-ID. |
+| `gmail.prepare_message` | read (no effect) | Mints a deterministic Message-ID and a `Reference: SL<12 hex>` body line derived from it, runs DashClaw's non-fabrication check against the run's verified facts, and records recipient confidence (high only if the address matches Stripe or HubSpot on file). |
+| `gmail.send_message` | **write, external** | Governed. Sends exactly the prepared message; a low-confidence recipient carries `risk_score:92`. Verify: the message read back by the id Gmail returned, under Sent; a lost send answer is reconciled by a search on Message-ID or reference. |
+| `gmail.find_sent_message` | read | Search by Message-ID or the reference derived from it. |
 
 No tool takes a URL, a header, a raw body or a secret. The runtime constructs every request from arguments the
 tool's own `validate()` accepted.

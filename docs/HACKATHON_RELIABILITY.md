@@ -31,10 +31,12 @@ goes out.
   `precheck` step reads the property before writing; if it already matches, the effect is recorded `verified` with
   `attempts:0` and no write is sent at all.
 - **Gmail.** A deterministic Message-ID, `<sidelook-<runId>-<n>@sidelook.local>`, minted by
-  `gmail.prepare_message`. Verification and reconciliation both search Gmail by that exact Message-ID, never by
-  content. Gmail offers no idempotency key and its search index lags a send, so a send whose answer was lost is never
-  resent on the strength of an absent read: it stays `uncertain` and is read again (three reads, 3 s apart) at the
-  end of the run. The send's logical identity is `send:<recipient>:<refund id>`, so a second prepare in the same run
+  `gmail.prepare_message`, and a `Reference: SL<12 hex>` line derived from it that the tool appends to the body before
+  DashClaw checks the content. Gmail rewrites the Message-ID header for gmail.com senders (seen live 2026-09-11), so the
+  reference is the identity that survives. Verification reads the message by the id Gmail returned from the send; only
+  reconciliation, which runs when that id was never received, searches by Message-ID or reference. Gmail offers no
+  idempotency key and its search index lags a send, so a send whose answer was lost is never resent on the strength of
+  an absent read: it stays `uncertain` and is read again (three reads, 3 s apart) at the end of the run. The send's logical identity is `send:<recipient>:<refund id>`, so a second prepare in the same run
   cannot produce a second confirmation to the same person.
 - **DashClaw.** `createAction`'s own `idempotency_key` is the same value. A replayed call returns
   `idempotent_replay:true` with the existing action row; `governed.mjs` maps that row's actual status
@@ -46,7 +48,7 @@ goes out.
 `reconcile()` in `effects.mjs` reads the provider back after any failure and returns one of three findings:
 
 - **present.** The provider already holds the write (a Stripe refund matched by `metadata.sidelook_effect`, a
-  HubSpot property equal to the target value, a Gmail message under Sent by Message-ID). Treated as executed and
+  HubSpot property equal to the target value, a Gmail message under Sent found by Message-ID or reference). Treated as executed and
   carried straight into the normal verify step; nothing is resent.
 - **absent.** The provider holds no trace. For Stripe (idempotency key) and HubSpot (a property set to a value) this
   is safe to retry, bounded to 3 attempts total with 1s/3s backoff. For Gmail an absent search read is treated as
