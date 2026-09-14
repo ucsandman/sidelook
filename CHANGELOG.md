@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.18.1: The walkthrough shows the studio that shipped
 
 - The site walks through the studio that shipped, not the one before it. Three of the four walkthrough steps were text stand-ins for a picture; each now carries a capture of the pane it describes, taken from the running studio by `npm run build:captures` with the recorded fixture and no inference: the reference pane with its viewfinder and the three sources, the direction pane with the frame riding as a chip, and the stage with the finished prototype, Source and Download and the versions deck. They are 2x files so the page scales them down instead of up. The builder section leads with the shape of the studio (a toolbar, the panes down the left, the prototype and the reply in the middle, the versions along the bottom, F6 between them, one column below 900 pixels).
 - verify-site checks each step's capture: the right file in the right panel, decoded, and its declared `width` and `height` equal to the file's real pixels. Two published images had been declaring sizes from files replaced two releases ago (`streaming.png` said 1440x1688 for a 1440x1001 image, `computer.png` 1360x1392 for a 620x1000 one), which reserves the wrong space and shifts the panel as it loads. Observed failing first on a deliberately wrong height.
+
+- No application code changed since 0.18.0. The executable is the same app with the new version string, rebuilt so the site's pinned download and the release it points at carry one version.
 
 ## 0.18.0: Bench, the welded studio, and an agent that heals itself
 
