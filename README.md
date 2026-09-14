@@ -55,14 +55,14 @@ It's experimental and built around how I work. Anthropic models can burn paid Cl
 
 Windows 10/11 x64 only. Chrome or Edge for screen sharing. The download is about 164 MiB. **The exe is unsigned**, so expect the unknown-publisher prompt. The [release has a SHA-256 checksum](https://github.com/ucsandman/sidelook/releases/tag/v0.18.1) and the bundled Node and Codex are publisher-verified. [Install, update, remove](docs/WINDOWS.md).
 
-> **Microsoft Defender currently flags this download as `Trojan:Win32/Sabsik.TE.A!ml` and may delete it.** It is a false positive on the unsigned self-extracting launcher: the same build is flagged on the build machine before it is ever uploaded, and the bundled `node.exe` and `codex.exe` have their Authenticode signatures and publishers checked at build time. Verify what you got before running it:
+> **Verify the download.** The exe is unsigned, so check it against the published checksum before you run it:
 >
 > ```
 > certutil -hashfile Sidelook-0.18.1-Windows-x64.exe SHA256
-> 79afe17a9c8807593cf9786b4a1838b6fdbc2e342ca2bd6dde663b1bf448e1f1
+> 91113d729f61a66b016504ce921d312032e7cbf28cbd50865231b3ed81c33116
 > ```
 >
-> Code signing is the fix and is not in place yet.
+> If Windows Defender removes the download as a threat, that is a false positive on the unsigned self-extracting launcher, not a compromise. The bundled `node.exe` and `codex.exe` have their Authenticode signatures and publishers checked at build time, and the checksum above tells you the file is the one that was built. Code signing is the real fix and is not in place yet.
 
 The companion needs the Microsoft Edge WebView2 Runtime. Sidelook checks on launch and tells you where to get it if it's missing. Its WebView profile is separate from any browser profile you used with an older install, so old revisions don't show up on their own. Export the HTML from the old profile, then **Settings, Advanced, Import a saved HTML prototype**. Imports cap at 120,000 bytes and add a version when the 12-slot history has room.
 

@@ -20,10 +20,25 @@
   reach the download and that the bytes hash correctly; nothing proves the bytes survive contact with Defender.
   The gap between "the file is reachable" and "the file is usable" is where both of the last two download
   failures lived.
+- Resolved by rebuilding, in about five minutes, and the measurement is what found it. The launcher's shape was
+  never the problem: `Sidelook-0.16.0`, `0.17.0` and `0.18.0` all sat on this machine unflagged, same build
+  script, same self-extracting shape. Only the brand new 0.18.1 hash tripped the cloud heuristic. A plain
+  rebuild produces a different hash (the payload zip's timestamps move), and `MpCmdRun -Scan` on the fresh exe
+  found no threats. The asset was replaced with `gh release upload --clobber`, and an anonymous download of the
+  new asset scans clean and hashes to 91113d729f61a66b016504ce921d312032e7cbf28cbd50865231b3ed81c33116.
+- So the first question on a detection like this is "are the previous builds flagged too?", not "what is wrong
+  with our packaging?". Four builds of one launcher, one flagged, is a coin flip in a cloud classifier, not a
+  property of the file. Scanning the three older exes cost one command and pointed straight at the cheap fix;
+  the signing research it looked like it needed would have taken the rest of the day and fixed nothing today.
+- What that cost, and the real lesson: the site spent about forty minutes publishing an alarming and partly
+  wrong story ("Defender flags this download") plus a checksum that was about to be replaced, because the
+  warning went up before the cheapest diagnostic had been run. Write the notice after the measurement. A
+  checksum on a public page is load-bearing; publishing one for an asset that then changes is worse than
+  publishing none.
 - The one change: a release is not verified until the published exe has been downloaded and scanned on a machine
   with real-time protection on, and the scan result is recorded beside the hash. `Get-MpThreatDetection` after an
   anonymous download is the check; it goes in the release procedure next to the hash comparison, not in a later
-  sweep.
+  sweep. When it comes back dirty, rebuild and rescan before anything else.
 
 ## 2026-09-11: Shipping 0.18.0
 
