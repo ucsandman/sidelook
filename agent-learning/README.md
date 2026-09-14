@@ -88,10 +88,10 @@ agent-learning/
     dev/reg_*.json          seen by the generator
     holdout/reg_*.json      never seen by the generator; a confirmation set
   memory/learning-memory.json   bounded learning memory (committed)
-  retros/retro-<learnRunId>.json
-  candidates/cand_*.json
-  evaluations/eval_*.json
-  next_loop.json            machine-readable guidance for the next run
+  retros/retro-<learnRunId>.json  (ignored)
+  candidates/cand_*.json          (ignored)
+  evaluations/eval_*.json         (ignored)
+  next_loop.json            machine-readable guidance for the next run (ignored)
   fixtures/                 the --fixtures corpus: data/runs, data/incidents, inference.json
 .artifacts/agent-learning/<learnRunId>/   per-run scratch (ignored): incumbent.json, evidence.json, the reports
 .worktrees/<candidateId>/                 candidate worktrees (ignored; removed after evaluation unless promotable)

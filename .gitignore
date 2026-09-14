@@ -10,3 +10,9 @@ node_modules/
 .handoff-notes*.md
 .impeccable.md
 .worktrees/
+
+# Per-run learning-loop records. memory/learning-memory.json stays committed.
+agent-learning/candidates/
+agent-learning/evaluations/
+agent-learning/retros/
+agent-learning/next_loop.json

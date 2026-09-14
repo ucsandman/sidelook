@@ -68,11 +68,11 @@ agent-learning/
     README.md
     dev/reg_*.json                development regression scenarios (shown to the generator)
     holdout/reg_*.json            confirmation scenarios (never shown to the generator)
-  memory/learning-memory.json     bounded learning memory (committed)
-  retros/retro-<learnRunId>.json  one per learning run (committed)
-  candidates/cand_*.json          candidate lineage records (committed)
-  evaluations/eval_*.json         evaluation records (committed)
-  next_loop.json                  machine-readable guidance for the next run (committed)
+  memory/learning-memory.json     bounded learning memory (committed; the loop writes it on every real run)
+  retros/retro-<learnRunId>.json  one per learning run (ignored)
+  candidates/cand_*.json          candidate lineage records (ignored)
+  evaluations/eval_*.json         evaluation records (ignored)
+  next_loop.json                  machine-readable guidance for the next run (ignored)
 .artifacts/agent-learning/<learnRunId>/   per-run scratch: incumbent.json, evidence.json, learning_report.md, … (ignored)
 .worktrees/<candidateId>/                 candidate worktrees (ignored; removed after evaluation unless promotable)
 ```

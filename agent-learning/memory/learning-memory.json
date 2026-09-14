@@ -1,15 +1,306 @@
 {
   "schemaVersion": 1,
-  "updatedAt": null,
-  "lastIntakeAt": null,
-  "loops": [],
+  "updatedAt": "2026-09-14T06:34:50.659Z",
+  "lastIntakeAt": "2026-09-14T06:34:50.658Z",
+  "loops": [
+    {
+      "learnRunId": "learn_20260912T063002Z_b639",
+      "at": "2026-09-12T06:34:29.234Z",
+      "incumbentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "candidates": 2,
+      "promoted": 0,
+      "rejected": 2
+    },
+    {
+      "learnRunId": "learn_20260913T063002Z_0bc9",
+      "at": "2026-09-13T06:34:31.112Z",
+      "incumbentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "candidates": 2,
+      "promoted": 0,
+      "rejected": 2
+    },
+    {
+      "learnRunId": "learn_20260914T063001Z_880d",
+      "at": "2026-09-14T06:34:50.658Z",
+      "incumbentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "candidates": 2,
+      "promoted": 0,
+      "rejected": 2
+    }
+  ],
   "lessons": [],
   "failureFamilies": [],
   "recoveryStrategies": [],
-  "rejectedStrategies": [],
+  "rejectedStrategies": [
+    {
+      "hypothesisKey": "run-telemetry-gap",
+      "summary": "mechanism: add an explicit run-finalization telemetry emission hook that writes a status record on every run exit path (success, error, timeout), independent of any downstream aggregation logic.",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_835a1476820a",
+      "evaluationId": "eval_452e44710d7e",
+      "learnRunId": "learn_20260912T063002Z_b639",
+      "at": "2026-09-12T06:34:29.234Z"
+    },
+    {
+      "hypothesisKey": "incident-classification-silent-drop",
+      "summary": "mechanism: inject a synthetic canary incident (a deliberately triggered, tagged failure) at loop start and verify it appears in incidents.byClass and attribution buckets by loop end.",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_b3ecac3c5e9f",
+      "evaluationId": "eval_521ed8acbe17",
+      "learnRunId": "learn_20260912T063002Z_b639",
+      "at": "2026-09-12T06:34:29.234Z"
+    },
+    {
+      "hypothesisKey": "corpus-baseline-missing",
+      "summary": "mechanism: schedule a standalone corpus evaluation pass (dev + holdout sets) that runs independently of production traffic and writes pass rates directly into the same evidence store this retrospective reads from, with a completion timestam",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_c98b0256d7fa",
+      "evaluationId": "eval_0f13781f72ac",
+      "learnRunId": "learn_20260913T063002Z_0bc9",
+      "at": "2026-09-13T06:34:31.113Z"
+    },
+    {
+      "hypothesisKey": "degenerate-evidence-breaker",
+      "summary": "mechanism: add a pre-analysis gate that compares this loop's runs.total against the prior loop's runs.total; if the current total is 0 while the prior loop was nonzero, halt the retrospective and emit a distinct governance alert instead of ",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_589f577fbd78",
+      "evaluationId": "eval_a896fde1bf70",
+      "learnRunId": "learn_20260913T063002Z_0bc9",
+      "at": "2026-09-13T06:34:31.113Z"
+    },
+    {
+      "hypothesisKey": "aggregation-readpath-heartbeat",
+      "summary": "mechanism: instrument the evidence aggregation query itself with a heartbeat counter that increments on every successful read against the runs/incidents backing store, exposed as a metric independent of run or incident outcomes.",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_dfdabae47d35",
+      "evaluationId": "eval_79f84742dcb6",
+      "learnRunId": "learn_20260914T063001Z_880d",
+      "at": "2026-09-14T06:34:50.659Z"
+    },
+    {
+      "hypothesisKey": "orchestration-log-reconciliation",
+      "summary": "mechanism: at loop start, reconcile the evidence store's runs.total count against a count pulled from the underlying orchestration/scheduler logs for the same time window, and flag a mismatch as a distinct reconciliation incident before ana",
+      "reason": "no_measurable_improvement",
+      "candidateId": "cand_2112e380758b",
+      "evaluationId": "eval_c021e2162287",
+      "learnRunId": "learn_20260914T063001Z_880d",
+      "at": "2026-09-14T06:34:50.659Z"
+    }
+  ],
   "unresolved": [],
-  "nextExperiments": [],
-  "trends": [],
-  "lineage": [],
-  "rejectedMemoryItems": []
+  "nextExperiments": [
+    {
+      "hypothesisKey": "corpus-baseline-missing",
+      "summary": "mechanism: schedule a standalone corpus evaluation pass (dev + holdout sets) that runs independently of production traffic and reports pass rates into the same evidence store this retrospective reads from.",
+      "priority": 5,
+      "provenance": {
+        "runIds": [],
+        "incidentIds": [],
+        "learnRunId": "learn_20260912T063002Z_b639",
+        "source": "retro"
+      }
+    },
+    {
+      "hypothesisKey": "aggregation-readpath-heartbeat",
+      "summary": "mechanism: instrument the evidence aggregation query itself with a heartbeat counter that increments on every successful read against the runs/incidents backing store, exposed as a metric independent of run or incident outcomes.",
+      "priority": 5,
+      "provenance": {
+        "runIds": [],
+        "incidentIds": [],
+        "learnRunId": "learn_20260913T063002Z_0bc9",
+        "source": "retro"
+      }
+    },
+    {
+      "hypothesisKey": "orchestration-log-reconciliation",
+      "summary": "mechanism: at loop start, reconcile the evidence store's runs.total count against a count pulled from the underlying orchestration/scheduler logs for the same time window, and flag a mismatch as a distinct reconciliation incident before ana",
+      "priority": 4,
+      "provenance": {
+        "runIds": [],
+        "incidentIds": [],
+        "learnRunId": "learn_20260913T063002Z_0bc9",
+        "source": "retro"
+      }
+    },
+    {
+      "hypothesisKey": "query-filter-audit",
+      "summary": "mechanism: log and surface the exact filter parameters (time window bounds, environment/tenant scope) used by the evidence aggregation query on each retrospective run, and diff them against the parameters used in the last loop that returned",
+      "priority": 5,
+      "provenance": {
+        "runIds": [],
+        "incidentIds": [],
+        "learnRunId": "learn_20260914T063001Z_880d",
+        "source": "retro"
+      }
+    },
+    {
+      "hypothesisKey": "repeated-degeneracy-escalation",
+      "summary": "mechanism: add a governance check that counts consecutive loops with runs.total=0 despite prior rejected fixes, and once the count exceeds a small threshold, halt further automated hypothesis generation for this failure family and emit a hu",
+      "priority": 4,
+      "provenance": {
+        "runIds": [],
+        "incidentIds": [],
+        "learnRunId": "learn_20260914T063001Z_880d",
+        "source": "retro"
+      }
+    }
+  ],
+  "trends": [
+    {
+      "learnRunId": "learn_20260912T063002Z_b639",
+      "at": "2026-09-12T06:34:29.234Z",
+      "metrics": {
+        "scenarioPassRate": 1,
+        "verifiedCompletionRate": 0.8448275862068966,
+        "incorrectSuccessClaims": 0,
+        "duplicateEffects": 0,
+        "uncertainFinalStates": 0,
+        "recoveries": 7,
+        "avgToolCalls": 0
+      }
+    },
+    {
+      "learnRunId": "learn_20260913T063002Z_0bc9",
+      "at": "2026-09-13T06:34:31.112Z",
+      "metrics": {
+        "scenarioPassRate": 1,
+        "verifiedCompletionRate": 0.8448275862068966,
+        "incorrectSuccessClaims": 0,
+        "duplicateEffects": 0,
+        "uncertainFinalStates": 0,
+        "recoveries": 7,
+        "avgToolCalls": 0
+      }
+    },
+    {
+      "learnRunId": "learn_20260914T063001Z_880d",
+      "at": "2026-09-14T06:34:50.658Z",
+      "metrics": {
+        "scenarioPassRate": 1,
+        "verifiedCompletionRate": 0.8448275862068966,
+        "incorrectSuccessClaims": 0,
+        "duplicateEffects": 0,
+        "uncertainFinalStates": 0,
+        "recoveries": 7,
+        "avgToolCalls": 0
+      }
+    }
+  ],
+  "lineage": [
+    {
+      "candidateId": "cand_835a1476820a",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "run-telemetry-gap",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-12T06:32:02.024Z"
+    },
+    {
+      "candidateId": "cand_b3ecac3c5e9f",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "incident-classification-silent-drop",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-12T06:32:26.722Z"
+    },
+    {
+      "candidateId": "cand_c98b0256d7fa",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "corpus-baseline-missing",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-13T06:32:13.135Z"
+    },
+    {
+      "candidateId": "cand_589f577fbd78",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "degenerate-evidence-breaker",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-13T06:32:30.551Z"
+    },
+    {
+      "candidateId": "cand_dfdabae47d35",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "aggregation-readpath-heartbeat",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-14T06:32:22.624Z"
+    },
+    {
+      "candidateId": "cand_2112e380758b",
+      "parentRevision": "0b024b93fb947cd62deef3d081677ec7f8c9eb99",
+      "hypothesisKey": "orchestration-log-reconciliation",
+      "decision": "rejected",
+      "reason": "no_measurable_improvement",
+      "at": "2026-09-14T06:32:50.867Z"
+    }
+  ],
+  "rejectedMemoryItems": [
+    {
+      "at": "2026-09-12T06:34:29.234Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-12T06:34:29.234Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-12T06:34:29.234Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-12T06:34:29.234Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-13T06:34:31.113Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-13T06:34:31.113Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-13T06:34:31.113Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-13T06:34:31.113Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-13T06:34:31.113Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-14T06:34:50.659Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-14T06:34:50.659Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-14T06:34:50.659Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    },
+    {
+      "at": "2026-09-14T06:34:50.659Z",
+      "field": "lessons",
+      "reason": "A lesson needs provenance with at least one run, incident, candidate or evaluation id."
+    }
+  ]
 }

@@ -15,10 +15,20 @@ test('EMPTY_MEMORY has schemaVersion 1 and every array present',()=>{
     assert.ok(Array.isArray(m[key]),key);
 });
 
-test('the committed agent-learning/memory/learning-memory.json is a valid empty memory',async()=>{
-  const text=await readFile(new URL('../agent-learning/memory/learning-memory.json',import.meta.url),'utf8');
-  const memory=JSON.parse(text);
-  assert.deepEqual(memory,EMPTY_MEMORY());
+// The nightly loop writes this committed file on every real run (learn.mjs memoryPath), so it
+// accumulates; asserting it equals EMPTY_MEMORY only held before the loop's first night. What has
+// to stay true is that the loop can load it back and that it is still within its caps.
+test('the committed agent-learning/memory/learning-memory.json is a valid, in-cap memory',async()=>{
+  const path=new URL('../agent-learning/memory/learning-memory.json',import.meta.url);
+  const memory=await loadMemory(path);
+  assert.equal(memory.schemaVersion,1);
+  assert.deepEqual(Object.keys(memory).sort(),Object.keys(EMPTY_MEMORY()).sort());
+  for(const [key,cap] of Object.entries(CAPS)){
+    assert.ok(Array.isArray(memory[key]),`${key} is an array`);
+    assert.ok(memory[key].length<=cap,`${key} holds ${memory[key].length}, cap ${cap}`);
+  }
+  for(const key of Object.keys(CAPS))
+    for(const item of memory[key]) assert.equal(typeof item,'object',`${key} item is an object`);
 });
 
 test('loadMemory returns EMPTY_MEMORY for a missing file',async()=>{
