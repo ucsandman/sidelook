@@ -20,25 +20,30 @@
   reach the download and that the bytes hash correctly; nothing proves the bytes survive contact with Defender.
   The gap between "the file is reachable" and "the file is usable" is where both of the last two download
   failures lived.
-- Resolved by rebuilding, in about five minutes, and the measurement is what found it. The launcher's shape was
-  never the problem: `Sidelook-0.16.0`, `0.17.0` and `0.18.0` all sat on this machine unflagged, same build
-  script, same self-extracting shape. Only the brand new 0.18.1 hash tripped the cloud heuristic. A plain
-  rebuild produces a different hash (the payload zip's timestamps move), and `MpCmdRun -Scan` on the fresh exe
-  found no threats. The asset was replaced with `gh release upload --clobber`, and an anonymous download of the
-  new asset scans clean and hashes to 91113d729f61a66b016504ce921d312032e7cbf28cbd50865231b3ed81c33116.
-- So the first question on a detection like this is "are the previous builds flagged too?", not "what is wrong
-  with our packaging?". Four builds of one launcher, one flagged, is a coin flip in a cloud classifier, not a
-  property of the file. Scanning the three older exes cost one command and pointed straight at the cheap fix;
-  the signing research it looked like it needed would have taken the rest of the day and fixed nothing today.
-- What that cost, and the real lesson: the site spent about forty minutes publishing an alarming and partly
-  wrong story ("Defender flags this download") plus a checksum that was about to be replaced, because the
-  warning went up before the cheapest diagnostic had been run. Write the notice after the measurement. A
-  checksum on a public page is load-bearing; publishing one for an asset that then changes is worse than
-  publishing none.
+- Rebuilding did not fix it, and claiming it did was the real error. The rebuilt exe was flagged too, as
+  `Trojan:Win32/Wacatac.B!ml` this time rather than Sabsik: two builds, two different malware families. A new
+  hash gets a fresh cloud verdict and today those come back dirty, so a third build would have failed the same
+  way.
+- The false green came from testing the wrong path. The verification downloaded with `curl`, which writes no
+  Mark of the Web, and `MpCmdRun -Scan` on a file with no MOTW is a weaker evaluation than a browser download.
+  It returned "found no threats" on a file that Defender deleted the moment it arrived through the browser. The
+  local copy that had scanned clean went to READ BLOCKED about fifteen minutes later, when the cloud verdict
+  caught up. A scan result on a file the user's path would never produce is not evidence about the user's path.
+- The repro that matches a real download: fetch the asset anonymously, stamp the alternate data stream
+  (`Set-Content -Stream Zone.Identifier` with `ZoneId=3` and the referrer), then scan. `0.18.0` survives that
+  test; both `0.18.1` builds did not. Build the repro before the fix, not after the second failure.
+- Fixed by pinning the site's download back to v0.18.0, whose hash already carries an established clean cloud
+  verdict. It cost nothing, because no application code changed between 0.18.0 and 0.18.1: the whole diff was
+  the site, three captures and docs, and the release existed only to keep a version string in lockstep. When a
+  release carries no product change, the version is the cheapest thing to give up.
+- The diagnostic that looked decisive and was not: copying 0.18.0's bytes to a new path and scanning them
+  clean. Same bytes means the same hash, so it hit the same known-good verdict and proved nothing about the
+  launcher's shape. A test that cannot distinguish the two hypotheses is not a test.
 - The one change: a release is not verified until the published exe has been downloaded and scanned on a machine
   with real-time protection on, and the scan result is recorded beside the hash. `Get-MpThreatDetection` after an
-  anonymous download is the check; it goes in the release procedure next to the hash comparison, not in a later
-  sweep. When it comes back dirty, rebuild and rescan before anything else.
+  anonymous download is the check, with Mark of the Web stamped so it matches a browser download, and it goes in
+  the release procedure next to the hash comparison. When it comes back dirty, the answer is not another build:
+  ship the last asset with a clean verdict and treat signing as the fix.
 
 ## 2026-09-11: Shipping 0.18.0
 

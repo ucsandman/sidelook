@@ -28,7 +28,7 @@ removed in 2024 and it is now $400+/year for the same reputation curve as a $9.9
 certificate, which blocks installation outright for every public reader; and shipping through the Microsoft
 Store, which would mean rebuilding the launcher as an MSIX and is a product decision, not a signing one.
 
-Not urgent, and here is why the urgency came off: the 0.18.1 detection was fixed the same hour by rebuilding, because three earlier builds of the same launcher were never flagged and only the new hash tripped the classifier. The immediate remedy for a flagged release is rebuild, rescan, `gh release upload --clobber`. Signing is worth doing because it stops the coin flip from being re-tossed on every release, not because the download is broken today.
+This is not a one-off to ride out. Two consecutive 0.18.1 builds were flagged as two different malware families, so every new hash is a fresh cloud verdict and the current odds are bad. The only thing that worked on 2026-09-14 was shipping an older asset that already had a clean verdict, and that trick only works while a release carries no product change. The next release with real code in it has no fallback, which is what makes signing load-bearing rather than tidy.
 
 What signing does and does not fix, so the next session does not over-promise: a consistent signed publisher
 identity is what lets reputation accumulate across releases instead of resetting each version, and it strongly
