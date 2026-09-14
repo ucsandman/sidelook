@@ -1,5 +1,39 @@
 # Architecture decisions
 
+## 2026-09-14: Sign the Windows build, and which certificate
+
+Defender deleted the 0.18.1 download the day it shipped (`Trojan:Win32/Sabsik.TE.A!ml`, the second time after
+0.12.0 on 2026-09-06). Unsigned is no longer a cost we can leave on the shelf: the site's one button hands the
+reader a file their antivirus removes. Priced on 2026-09-14 against Microsoft's own comparison, last updated
+2026-08-29.
+
+| Option | Cost | Open to Wes | SmartScreen |
+| --- | --- | --- | --- |
+| SignPath Foundation | free | MIT, public repo, actively maintained: all met | OV-level, reputation builds |
+| Azure Artifact Signing (was Trusted Signing) | ~$9.99/month | individuals limited to USA and Canada; Wes is US | reputation builds |
+| OV certificate (DigiCert, Sectigo) | $150-300/year | worldwide, needs an HSM or USB token since June 2023 | reputation builds |
+| EV certificate | $400+/year | worldwide | **no longer bypasses SmartScreen; removed in 2024** |
+| Microsoft Store (MSIX) | free | would mean shipping an MSIX, not this launcher | no warnings at all |
+
+Decided: apply to SignPath Foundation first, and fall back to Azure Artifact Signing at $9.99/month if the
+application is refused. SignPath is free and Sidelook meets the stated conditions (an OSI-approved licence with
+no commercial dual-licensing, a public codebase, actively maintained, already released in the form to be
+signed). The open question for the application is the bundled WebView2 redistributable, which is a Microsoft
+proprietary component; the condition is written against a maintainer's own proprietary code, so it is worth
+asking rather than assuming. Azure Artifact Signing is the fallback because it needs no hardware token and
+signs from CI, which an OV certificate on a USB token cannot do without a person present at every release.
+
+Refused, so nobody reopens them: an EV certificate, because the instant-SmartScreen-bypass it used to buy was
+removed in 2024 and it is now $400+/year for the same reputation curve as a $9.99/month service; a self-signed
+certificate, which blocks installation outright for every public reader; and shipping through the Microsoft
+Store, which would mean rebuilding the launcher as an MSIX and is a product decision, not a signing one.
+
+What signing does and does not fix, so the next session does not over-promise: a consistent signed publisher
+identity is what lets reputation accumulate across releases instead of resetting each version, and it strongly
+reduces heuristic false positives of this kind. It is not an instant fix. The first signed release can still
+draw a warning, and signing is not a guarantee against a Defender ML detection. The false-positive submission
+is still worth filing for the release that is public now.
+
 ## 2026-09-11: Bench, a welded studio; the decision never scrolls
 
 Wes asked for a tournament of UI and layout concepts judged on usability, intuitiveness, professional layout and Apple-grade craft, then the champion built. Eight designers (one lens each), five adversarial judges, two semifinals and a final ran as one workflow. D8 Bench (the studio as three welded regions, radius means float) beat D4 Sill (the consent surfaces pin their decision) 3-2 in the final, and Sill's decision card was grafted into Computer and Agent mode; 66 judge grafts were absorbed or refused with reasons. Every element id survived, every verifier stayed green, and two new bounding-box assertions in verify-agent and verify-computer were observed failing on the old layout before the build. Spec and record: `docs/superpowers/specs/2026-09-11-ui-layout-champion-design.md`.

@@ -1,5 +1,30 @@
 # Implementation lessons
 
+## 2026-09-14: Defender ate the release the day it shipped
+
+- `Trojan:Win32/Sabsik.TE.A!ml`, ThreatID 2147780193, on `Sidelook-0.18.1-Windows-x64.exe`. Defender deleted the
+  maintainer's download minutes after the release went public. It is the same ThreatID that flagged
+  `Jarvis-0.12.0-Windows-x64.exe` on 2026-09-06, so this is the second time, not the first, and the fix named
+  then (a false-positive submission and code signing) was never carried out. A known false positive that nobody
+  closed out came back on schedule.
+- What proved it was not a compromise, and the order to check it in: Defender flagged the exe sitting in
+  `.artifacts/windows-0.18.1/` on the build machine at the same second as the downloaded copy. A file that was
+  never uploaded cannot have been altered in transit, so the detection is on the file's shape and not on injected
+  content. The published `SHA256SUMS.txt` also serves the hash `build-windows.ps1` computed locally before
+  anything left the machine. Reach for the never-uploaded copy first; it settles the question in one step.
+- Neither copy could be hashed afterwards. Defender holds the file and `Get-FileHash` fails with the same virus
+  error, so the byte-for-byte comparison the release procedure asks for cannot be run once the detection lands.
+  Hash the build and record it before the download, which `build-windows.ps1` already does, or the evidence is
+  gone when it is needed.
+- The verifiers were all green and none of them could see this. `verify-site` proves an anonymous visitor can
+  reach the download and that the bytes hash correctly; nothing proves the bytes survive contact with Defender.
+  The gap between "the file is reachable" and "the file is usable" is where both of the last two download
+  failures lived.
+- The one change: a release is not verified until the published exe has been downloaded and scanned on a machine
+  with real-time protection on, and the scan result is recorded beside the hash. `Get-MpThreatDetection` after an
+  anonymous download is the check; it goes in the release procedure next to the hash comparison, not in a later
+  sweep.
+
 ## 2026-09-11: Shipping 0.18.0
 
 - The site's one button has been dead for two releases and no check could see it. `ucsandman/sidelook` is a private
